@@ -161,3 +161,4 @@ cython_debug/
 wise_flow/data/BPI_Challenge_2019.csv
 wise_flow/data/BPI_Challenge_2019.xes
 *.csv
+wise_flow/tests/explore_data.ipynb

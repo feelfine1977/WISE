@@ -1,0 +1,47 @@
+{
+    "Standard": {
+        "found_events": ["Create Purchase Order Item", "Vendor creates invoice", "Record Goods Receipt", "Clear Invoice"],
+        "seq_events": [["Create Purchase Order Item", "Vendor creates invoice"], ["Vendor creates invoice", "Record Goods Receipt"], ["Record Goods Receipt", "Clear Invoice"]],
+        "equilibrium_events": ["Create Purchase Order Item", "Vendor Creates Invoice", "Record Goods Receipt", "Clear Invoice"],
+        "singular_events": [ "Record Goods Receipt", "Clear Invoice"],
+        "exclusion_events": ["Delete Purchase Order Item", "Change Price","Change Storage Location", "Change Currency" ,"Change payment term", 
+        "Change Incoterms", "Change Rejection Indicator","Change Approval for Purchase Order", "Change Quantity", "Change Material", "Change Vendor", 
+        "Change Purchase Order Item", "Cancel Goods Receipt", "Cancel Invoice Receipt"]
+
+    },
+    "Service": {
+        "found_events": ["Create Purchase Order Item", "Record Goods Receipt"],
+        "seq_events": [["Create Purchase Order Item", "Vendor creates invoice"]],
+        "equilibrium_events": ["Create Purchase Order Item", "Vendor Creates Invoice"],
+        "singular_events": [ "Record Goods Receipt", "Clear Invoice"],
+        "exclusion_events": ["Delete Purchase Order Item", "Change Price","Change Storage Location", "Change Currency" ]
+    },
+    "Consignment": {
+        "found_events": ["Create Purchase Order Item", "Record Goods Receipt", "Record Service Entry Sheet"],
+        "seq_events": [["Create Purchase Order Item", "Vendor creates invoice"]],
+        "equilibrium_events": ["Create Purchase Order Item", "Vendor Creates Invoice"],
+        "singular_events": [ "Record Goods Receipt", "Clear Invoice"],
+        "exclusion_events": ["Delete Purchase Order Item", "Change Price","Change Storage Location", "Change Currency" ]
+    },
+    "Third-party": {
+        "found_events": ["Create Purchase Order Item", "Record Goods Receipt", "Record Service Entry Sheet"],
+        "seq_events": [["Create Purchase Order Item", "Vendor creates invoice"]],
+        "equilibrium_events": ["Create Purchase Order Item", "Vendor Creates Invoice"],
+        "singular_events": [ "Record Goods Receipt", "Clear Invoice"],
+        "exclusion_events": ["Delete Purchase Order Item", "Change Price","Change Storage Location", "Change Currency" ]
+    },
+    "Subcontracting": {
+        "found_events": ["Create Purchase Order Item", "Record Goods Receipt", "Record Service Entry Sheet"],
+        "seq_events": [["Create Purchase Order Item", "Vendor creates invoice"]],
+        "equilibrium_events": ["Create Purchase Order Item", "Vendor Creates Invoice"],
+        "singular_events": [ "Record Goods Receipt", "Clear Invoice"],
+        "exclusion_events": ["Delete Purchase Order Item", "Change Price","Change Storage Location", "Change Currency" ]
+    },
+    "Limit": {
+        "found_events": ["Create Purchase Order Item", "Record Goods Receipt", "Record Service Entry Sheet"],
+        "seq_events": [["Create Purchase Order Item", "Vendor creates invoice"]],
+        "equilibrium_events": ["Create Purchase Order Item", "Vendor Creates Invoice"],
+        "singular_events": [ "Record Goods Receipt", "Clear Invoice"],
+        "exclusion_events": ["Delete Purchase Order Item", "Change Price","Change Storage Location", "Change Currency" ]
+    }
+}

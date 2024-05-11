@@ -1,0 +1,20 @@
+Layers:
+  - Layer: General_Process_Standards
+    Categories:
+
+      - Category: Service
+        Foundational_Scores:
+          events: ["Create Purchase Order Item", "Record Goods Receipt", "Record Service Entry Sheet"]
+          weights: [0.5, 0.5, 0.5]
+        Sequential_Scores:
+          events: [["Create Purchase Order Item", "Vendor creates invoice"]]
+          weights: [1.0]
+        Equilibrium_Scores:
+          events: ["Create Purchase Order Item", "Vendor Creates Invoice"]
+          weights: [0.5, 0.75]
+        Singular_Scores:
+          events: ["Record Goods Receipt", "Clear Invoice"]
+          weights: [0.5, 0.8]
+        Exclusion_Scores:
+          events: ["Delete Purchase Order Item", "Change Price", "Change Storage Location", "Change Currency"]
+          weights: [0.75, 0.25, 0.65, 0.45]

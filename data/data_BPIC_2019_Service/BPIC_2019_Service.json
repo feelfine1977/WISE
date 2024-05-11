@@ -1,0 +1,19 @@
+{
+    "activity": "concept:name",
+    "case_id": "case:concept:name",
+    "timestamp": "time:timestamp",
+    "cat_dim_resource": "event_User",
+    "cat_dim_13": "case_Spend_area_text",
+    "cat_dim_2": "case_Sub_spend_area_text",
+    "cat_dim_3": "case_Document_Type",
+    "cat_dim_4": "case_Company" ,
+    "cat_dim_5": "case_Spend_area_text",
+    "cat_dim_6": "case_Item_Type",
+    "cat_dim_7": "case_Item_Category",
+    "cat_dim_8": "case_Vendor",
+    "cat_dim_9": "case_Spend_classification_text",
+    "cat_dim_10": "case_Source",
+    "cat_dim_11": "case_GR_Based_Inv_Verif.",
+    "cat_dim_12": "case_Goods_Receipt",
+    "num_dim_1": "event_Cumulative_net_worth_(EUR)"
+}

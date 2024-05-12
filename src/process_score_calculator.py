@@ -25,6 +25,10 @@ class ProcessScoreCalculator:
             'exclusion': ScoreExclusionCalculator(pivot_frequencies, self.weights, cat, index=self.index)
         }
         self.calculate_scores()
+        self.add_mean_score()
+        
+    def add_mean_score(self):
+        self.data['mean_score'] = self.data.filter(like='score').mean(axis=1)
 
     def calculate_scores(self):
         score_frames = []
@@ -43,6 +47,7 @@ class ProcessScoreCalculator:
                     self.data = self.data.join(calculated_scores).reset_index()
             if self.grouped:
                 all_scores = pd.concat(score_frames, axis=1)
+                
                 
                 self.data = all_scores
 

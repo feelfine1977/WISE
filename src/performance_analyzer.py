@@ -15,6 +15,7 @@ class PerformanceAnalyzer:
         self.DataName = DataName
         self.json_mapping = json_mapping or {}
         self.score_columns, self.category_columns = self.get_columns(data)
+        self.save_path = '/Users/urszulajessen/code/gitHub/WISE/data/results/data_BPIC_2019/'
 
     def get_columns(self, data):
         score_columns = [col for col in data.columns if col.startswith('score_')]
@@ -38,35 +39,40 @@ class PerformanceAnalyzer:
         outliers = data[(data < lower_bound) | (data > upper_bound)]
         return lower_bound, upper_bound, whis, outliers
 
-    def plot_custom_boxplot(self, score_column_name, category_column, method='standard', title=None):
+    def plot_custom_boxplot(self, score_column_name, category_column, method='standard', title=None, save_path=None):
         plt.figure(figsize=(12, 8))
         categories = self.data[category_column].unique()
-        colors = sns.color_palette("RdYlGn", len(categories))
+        colors = sns.color_palette("deep", len(categories))  # Using muted colors for better visual appearance
         
         for i, category in enumerate(categories):
             category_data = self.data[self.data[category_column] == category][score_column_name].dropna()
             if not category_data.empty:
                 lower_bound, upper_bound, _, _ = self.calculate_outliers(category_data, method=method)
                 
-                # Convert bounds to percentiles for whisker positions
-                # Finding percentiles that correspond to the actual data values of lower_bound and upper_bound
+                # Finding percentiles for whisker positions
                 lower_whisker = np.percentile(category_data, np.interp(lower_bound, np.sort(category_data), np.linspace(0, 100, len(category_data))))
                 upper_whisker = np.percentile(category_data, np.interp(upper_bound, np.sort(category_data), np.linspace(0, 100, len(category_data))))
                 
                 sns.boxplot(x=category_column, y=score_column_name, data=self.data[self.data[category_column] == category],
                             whis=[lower_whisker, upper_whisker], color=colors[i])
-
-        plt.xticks(rotation=45)
+        if len(categories) > 10:
+            plt.xticks(rotation=90)
+        else:
+            plt.xticks(rotation=45)
         plt.title(title if title else f'Custom Box Plot of {score_column_name} by {category_column}', fontsize=16)
         plt.xlabel(category_column, fontsize=14)
         plt.ylabel(score_column_name, fontsize=14)
         sns.despine(trim=True)
         plt.tight_layout()
+        
+        if save_path:
+            plt.savefig(save_path)  # Save the plot to a file
         plt.show()
+
 
     def analyze_performance(self, visualize=False, category_vis=None, score_vis=None, method='standard'):
         if visualize:
-            self.plot_custom_boxplot(score_vis, category_vis, method=method, title='Adjusted Box Plot of Scores by Category')
+            self.plot_custom_boxplot(score_vis, category_vis, method=method, title='Adjusted Box Plot of Scores by Category', save_path=f'{self.save_path}{category_vis}_adjusted_boxplot.png')
 
 def perform_analysis(visualize=False, category=None, score=None, DataName="BPIC_2019", method='standard', data_filtered=None):
     if data_filtered is not None:
@@ -78,4 +84,4 @@ def perform_analysis(visualize=False, category=None, score=None, DataName="BPIC_
     analyzer.analyze_performance(visualize=visualize, category_vis=category, score_vis=score, method=method)
 
 if __name__ == '__main__':
-    perform_analysis(visualize=True, category='cat_dim_6', score='mean_score', method='standard')
+    perform_analysis(visualize=True, category='cat_dim_5', score='mean_score',method='adjusted', DataName="sample")

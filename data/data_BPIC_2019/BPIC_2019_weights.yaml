@@ -1,102 +1,91 @@
 Layers:
-  - Layer: General_Process_Standards
-    Categories:
-      - Category: Standard
-        Foundational_Scores:
-          events: ["Create Purchase Order Item", "Vendor creates invoice", "Record Goods Receipt", "Clear Invoice"]
-          weights: [0.25, 0.25, 0.25, 0.25]
-        Sequential_Scores:
-          events: [["Create Purchase Order Item", "Vendor creates invoice"], ["Vendor creates invoice", "Record Goods Receipt"], ["Record Goods Receipt", "Clear Invoice"]]
-          weights: [0.333, 0.76, 0.84]
-        Equilibrium_Scores:
-          events: ["Create Purchase Order Item", "Vendor Creates Invoice", "Record Goods Receipt", "Clear Invoice"]
-          weights: [0.25, 0.25, 0.65, 0.75]
-        Singular_Scores:
-          events: ["Record Goods Receipt", "Clear Invoice"]
-          weights: [0.5, 0.9]
-        Exclusion_Scores:
-          events: ["Delete Purchase Order Item", "Change Price", "Change Storage Location", "Change Currency", "Change payment term", "Change Incoterms", "Change Rejection Indicator", "Change Approval for Purchase Order", "Change Quantity", "Change Material", "Change Vendor", "Change Purchase Order Item", "Cancel Goods Receipt", "Cancel Invoice Receipt"]
-          weights: [0.771, 0.371, 0.171, 0.071, 0.071, 0.371, 0.071, 0.271, 0.071, 0.172, 0.32, 0.071, 0.42, 0.071]
-
-      - Category: Service
-        Foundational_Scores:
-          events: ["Create Purchase Order Item", "Record Goods Receipt"]
-          weights: [0.5, 0.5]
-        Sequential_Scores:
-          events: [["Create Purchase Order Item", "Vendor creates invoice"]]
-          weights: [1.0]
-        Equilibrium_Scores:
-          events: ["Create Purchase Order Item", "Vendor Creates Invoice"]
-          weights: [0.5, 0.75]
-        Singular_Scores:
-          events: ["Record Goods Receipt", "Clear Invoice"]
-          weights: [0.5, 0.8]
-        Exclusion_Scores:
-          events: ["Delete Purchase Order Item", "Change Price", "Change Storage Location", "Change Currency"]
-          weights: [0.75, 0.25, 0.65, 0.45]
-
-      - Category: Consignment
-        Foundational_Scores:
-          events: ["Create Purchase Order Item", "Record Goods Receipt"]
-          weights: [0.5, 0.5]
-        Sequential_Scores:
-          events: [["Create Purchase Order Item", "Vendor creates invoice"]]
-          weights: [1.0]
-        Equilibrium_Scores:
-          events: ["Create Purchase Order Item", "Vendor Creates Invoice"]
-          weights: [0.5, 0.75]
-        Singular_Scores:
-          events: ["Record Goods Receipt", "Clear Invoice"]
-          weights: [0.5, 0.8]
-        Exclusion_Scores:
-          events: ["Delete Purchase Order Item", "Change Price", "Change Storage Location", "Change Currency"]
-          weights: [0.75, 0.25, 0.65, 0.45]
-
-      - Category: Third-party
-        Foundational_Scores:
-          events: ["Create Purchase Order Item", "Record Goods Receipt"]
-          weights: [0.5, 0.5]
-        Sequential_Scores:
-          events: [["Create Purchase Order Item", "Vendor creates invoice"]]
-          weights: [1.0]
-        Equilibrium_Scores:
-          events: ["Create Purchase Order Item", "Vendor Creates Invoice"]
-          weights: [0.5, 0.75]
-        Singular_Scores:
-          events: ["Record Goods Receipt", "Clear Invoice"]
-          weights: [0.5, 0.8]
-        Exclusion_Scores:
-          events: ["Delete Purchase Order Item", "Change Price", "Change Storage Location", "Change Currency"]
-          weights: [0.75, 0.25, 0.65, 0.45]
-      - Category: Subcontracting
-        Foundational_Scores:
-          events: ["Create Purchase Order Item", "Record Goods Receipt"]
-          weights: [0.5, 0.5]
-        Sequential_Scores:
-          events: [["Create Purchase Order Item", "Vendor creates invoice"]]
-          weights: [1.0]
-        Equilibrium_Scores:
-          events: ["Create Purchase Order Item", "Vendor Creates Invoice"]
-          weights: [0.5, 0.75]
-        Singular_Scores:
-          events: ["Record Goods Receipt", "Clear Invoice"]
-          weights: [0.5, 0.8]
-        Exclusion_Scores:
-          events: ["Delete Purchase Order Item", "Change Price", "Change Storage Location", "Change Currency"]
-          weights: [0.75, 0.25, 0.65, 0.45]
-      - Category: Limit
-        Foundational_Scores:
-          events: ["Create Purchase Order Item", "Record Goods Receipt"]
-          weights: [0.5, 0.5]
-        Sequential_Scores:
-          events: [["Create Purchase Order Item", "Vendor creates invoice"]]
-          weights: [1.0]
-        Equilibrium_Scores:
-          events: ["Create Purchase Order Item", "Vendor Creates Invoice"]
-          weights: [0.5, 0.75]
-        Singular_Scores:
-          events: ["Record Goods Receipt", "Clear Invoice"]
-          weights: [0.5, 0.8]
-        Exclusion_Scores:
-          events: ["Delete Purchase Order Item", "Change Price", "Change Storage Location", "Change Currency"]
-          weights: [0.75, 0.25, 0.65, 0.45]
+- Categories:
+  - Category: Standard
+    Change_Scores:
+      events:
+      - Change Price
+      - Change Quantity
+      - Change Currency
+      - Change Approval for Purchase Order
+      - Change payment term
+      - Change Rejection Indicator
+      - Change Storage Location
+      - Change Delivery Indicator
+      score_class: exclusion
+      weights:
+      - 0.7
+      - 0.6
+      - 0.75
+      - 0.250000000000001
+      - 0.500000000000001
+      - 0.250000000000001
+      - 0.200000000000001
+      - 0.400000000000001
+    Equilibrium_Scores:
+      events:
+      - Create Purchase Order Item
+      - Record Goods Receipt
+      - Clear Invoice
+      score_class: equilib
+      weights:
+      - 0.3
+      - 0.6
+      - 0.75
+    Exclusion_Scores:
+      events:
+      - Change Price
+      - Change Quantity
+      - Delete Purchase Order Item
+      - Cancel Invoice Receipt
+      - 'SRM: Deleted'
+      - Cancel Invoice Receipt
+      - Cancel Subsequent Invoice
+      - Change Currency
+      score_class: exclusion
+      weights:
+      - 0.3
+      - 0.6
+      - 0.75
+      - 0.450000000000001
+      - 0.250000000000001
+      - 0.7
+      - 0.8
+      - 0.550000000000001
+    Foundational_Scores:
+      events:
+      - Create Purchase Order Item
+      - Vendor creates invoice
+      - Clear Invoice
+      score_class: found
+      weights:
+      - 0.3
+      - 0.6
+      - 0.75
+    Sequential_Scores:
+      events:
+      - - Create Purchase Order Item
+        - Record Goods Receipt
+      - - Record Goods Receipt
+        - Vendor creates invoice
+      - - Record Goods Receipt
+        - Clear Invoice
+      score_class: sequnt
+      weights:
+      - 0.3
+      - 0.6
+      - 0.75
+    Singular_Scores:
+      events:
+      - Create Purchase Order Item
+      - Record Goods Receipt
+      - Clear Invoice
+      - Record Invoice Receipt
+      - Vendor creates invoice
+      score_class: sing
+      weights:
+      - 0.3
+      - 0.6
+      - 0.75
+      - 0.450000000000001
+      - 0.250000000000001
+  Layer: General_Process_Standards

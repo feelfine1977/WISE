@@ -17,7 +17,7 @@ class DataHandler:
         
 
     def _determine_base_path(self, MAC):
-        return '/Users/urszulajessen/code/gitHub/WISE/data/' if MAC else 'C:\\Code\\Github\\WISE\\wise_flow\\data\\'
+        return '/Users/urszulajessen/code/gitHub/WISE/data/' if MAC else 'D:\\Code\\PHD\\WISE\\data\\'
 
     def load_data(self):
         paths = self._get_data_paths()
@@ -30,7 +30,10 @@ class DataHandler:
         return self.data,  self.weights_yaml, self.log, self._load_json(paths['json'])
 
     def _get_data_paths(self):
-        base_path = f'{self.base_path}data_{self.DataName}/'
+        if self.MAC:
+            base_path = f'{self.base_path}data_{self.DataName}/'
+        else:
+            base_path = f'{self.base_path}data_{self.DataName}\\'
         return {
             'csv': f'{base_path}{self.DataName}.csv',
             'json': f'{base_path}{self.DataName}.json',

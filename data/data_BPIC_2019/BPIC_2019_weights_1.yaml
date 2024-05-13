@@ -1,0 +1,59 @@
+Equilibrium:
+  events:
+  - Create Purchase Order Item
+  - Record Goods Receipt
+  - Clear Invoice
+  weights:
+  - 0.3
+  - 0.6
+  - 0.75
+Exclusion:
+  events:
+  - Change Price
+  - Change Quantity
+  - Delete Purchase Order Item
+  - Cancel Invoice Receipt
+  - 'SRM: Deleted'
+  - Cancel Invoice Receipt
+  - Cancel Subsequent Invoice
+  - Change Currency
+  weights:
+  - 0.3
+  - 0.6
+  - 0.75
+  - 0.450000000000001
+  - 0.250000000000001
+  - 0.7
+  - 0.8
+  - 0.550000000000001
+Foundational:
+  events:
+  - Create Purchase Order Item
+  - Vendor creates invoice
+  - Clear Invoice
+  weights:
+  - 0.3
+  - 0.6
+  - 0.75
+Sequential:
+  events:
+  - Create Purchase Order Item
+  - Record Goods Receipt
+  - Record Goods Receipt
+  weights:
+  - Record Goods Receipt
+  - Vendor creates invoice
+  - Clear Invoice
+Singular:
+  events:
+  - Create Purchase Order Item
+  - Record Goods Receipt
+  - Clear Invoice
+  - Record Invoice Receipt
+  - Vendor creates invoice
+  weights:
+  - 0.3
+  - 0.6
+  - 0.75
+  - 0.450000000000001
+  - 0.250000000000001

@@ -62,5 +62,5 @@ def prepare_calculations(MAC=False, DataName="sample", layer=None, index='case_i
     return score_calculator
 
 if __name__ == '__main__':
-    result = prepare_calculations(MAC=True, DataName="BPIC_2019", layer="General_Process_Standards", index='cat_dim_5', grouped=True)
+    result = prepare_calculations(MAC=False, DataName="BPIC_2019", layer="General_Process_Standards", index='cat_dim_5', grouped=True)
     print(result.data)  # Optionally print or log the result for debugging

@@ -1,7 +1,7 @@
 {
-    "activity": "concept:name",
-    "case_id": "case:concept:name",
-    "timestamp": "time:timestamp",
+    "activity": "event_concept_name",
+    "case_id": "case_concept_name",
+    "timestamp": "event_time_timestamp",
     "cat_dim_resource": "event_User",
     "cat_dim_13": "case_Spend_area_text",
     "cat_dim_2": "case_Sub_spend_area_text",

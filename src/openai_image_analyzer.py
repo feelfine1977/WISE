@@ -2,12 +2,15 @@ import openai
 import requests
 import base64
 
+
+
 class OpenAIImageAnalyzer:
     def __init__(self, api_key = None, image_path=None, prompt='Analyze the image'):
         if not api_key:
             self.api_key = "XXXX"
         else:
             self.api_key =  api_key
+        #if image path is not existent create image using 
         self.image_path = image_path
         self.prompt = prompt
         self.client = openai.OpenAI(api_key=self.api_key)
@@ -39,15 +42,49 @@ class OpenAIImageAnalyzer:
 
         return response.choices[0].message.content
     
+    def analyze_image_4o(self):
+        base64_image = self.encode_image()
+        headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+        }
+
+        payload = {
+        "model": "gpt-4o",
+        "messages": [
+            {
+            "role": "user",
+            "content": [
+                {
+                "type": "text",
+                "text": "What’s in this image?"
+                },
+                {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{base64_image}"
+                }
+                }
+            ]
+            }
+        ],
+        "max_tokens": 300
+        }
+
+        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+
+        print(response.json())
+    
 def analyze_image(api_key, image_path,prompt='Analyze the image'):
     analyzer = OpenAIImageAnalyzer(api_key,image_path,prompt=prompt)
-    response = analyzer.analyze_image()
+    #response = analyzer.analyze_image()
+    response = analyzer.analyze_image_4o()
     return response
     
 
 # Example usage
 if __name__ == '__main__':
-    api_key = None
+    api_key = "YOUR_API_KEY"      
     category = 'cat_dim_5'
     image_path = f'/Users/urszulajessen/code/gitHub/WISE/data/results/data_BPIC_2019/{category}_adjusted_boxplot.png'
     prompt = """

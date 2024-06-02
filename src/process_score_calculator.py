@@ -8,13 +8,14 @@ from score_singular import ScoreSingularCalculator
 from score_exclusion import ScoreExclusionCalculator
 
 class ProcessScoreCalculator:
-    def __init__(self, data, weights_yaml, json,pivot_frequencies, pivot_timestamps, cat='cat_dim_6', index='case_id', grouped=False):
+    def __init__(self, data, weights_yaml, json,pivot_frequencies, pivot_timestamps, cat='cat_dim_6', index='case_id', grouped=False,view=None):
         self.data = data
         self.weights = weights_yaml
         self.cat = cat
         self.index = index
         self.grouped = grouped  # Flag to indicate if the data is already grouped
         self.json = json
+        self.view = view
 
         # Initialize score calculators with the appropriate pivot table
         self.score_calculators = {
@@ -51,13 +52,13 @@ class ProcessScoreCalculator:
                 
                 self.data = all_scores
 
-def prepare_calculations(MAC=False, DataName="sample", layer=None, index='case_id', grouped=False):
+def prepare_calculations(MAC=False, DataName="sample", layer=None, index='case_id', grouped=False,view=None):
     data_handler = DataHandler(MAC=MAC, DataName=DataName, layer=layer, pivot_cat=index)
     data, weights_yaml, log, json_file = data_handler.load_data()
     pivot_table_frequence = data_handler.pivot_table_frequencies(cat='cat_dim_6')
     pivot_table_timestamps = data_handler.pivot_table_timestamps(cat='cat_dim_6')
     score_calculator = ProcessScoreCalculator(data, weights_yaml, json=json_file, pivot_frequencies=pivot_table_frequence, 
-                                              pivot_timestamps=pivot_table_timestamps, index=index,grouped=grouped)
+                                              pivot_timestamps=pivot_table_timestamps, index=index,grouped=grouped,view=view)
     
     return score_calculator
 

@@ -7,18 +7,24 @@ from pdpbox import pdp, info_plots
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.inspection import PartialDependenceDisplay
 from sklearn.model_selection import train_test_split
-
 from process_score_calculator import prepare_calculations as calculate_scores
+from helper import load_settings
 
 class PerformanceAnalyzer:
-    def __init__(self, data, index='case_Purchasing_Document', threshold=0.10, DataName="BPIC_2019", json_mapping=None):
+    def __init__(self, data, index='case_Purchasing_Document', threshold=0.10, DataName="BPIC_2019", json_mapping=None,path=None):
         self.data = data.fillna(0)
         self.threshold = threshold
         self.index = index
         self.DataName = DataName
         self.json_mapping = json_mapping or {}
         self.score_columns, self.category_columns = self.get_columns(data)
-        self.save_path = '/Users/urszulajessen/code/gitHub/WISE/data/results/data_BPIC_2019/'
+        settings =load_settings()
+        self.path = settings.get('data_path')
+
+        if path is not None:
+            self.save_path = path
+        else:
+            self.save_path = f'{self.path}/results/data_BPIC_2019/'
 
     def get_columns(self, data):
         score_columns = [col for col in data.columns if col.startswith('score_')]
@@ -143,14 +149,14 @@ class PerformanceAnalyzer:
         if sensitivity_analysis:
             self.create_sensitivity_analysis_heatmap(save_path=f'{self.save_path}sensitivity_analysis_heatmap.png')
 
-def perform_analysis(visualize=False, category=None, score=None, DataName="BPIC_2019", method='standard', data_filtered=None, all_plots=False):
+def perform_analysis(visualize=False, category=None, score=None, DataName="BPIC_2019", method='standard', data_filtered=None, all_plots=False, path=None):
     if data_filtered is not None:
         data = data_filtered
     else:
-        data = calculate_scores(MAC=True, DataName=DataName, layer="General_Process_Standards").data
+        data = calculate_scores( DataName=DataName, layer="General_Process_Standards").data
     json_mapping = {}
-    analyzer = PerformanceAnalyzer(data, DataName=DataName, json_mapping=json_mapping)
+    analyzer = PerformanceAnalyzer(data, DataName=DataName, json_mapping=json_mapping,path=path)
     analyzer.analyze_performance(visualize=visualize, category_vis=category, score_vis=score, method=method, all_plots=all_plots)
 
 if __name__ == '__main__':
-    perform_analysis(visualize=True, category='cat_dim_5', score='mean_score', method='adjusted', DataName="sample", all_plots=True)
+    perform_analysis(visualize=True, category='cat_dim_5', score='mean_score', method='adjusted', DataName="sample", all_plots=True, path=None)

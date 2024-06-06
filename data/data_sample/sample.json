@@ -13,7 +13,6 @@
     "cat_dim_8": "case_Vendor",
     "cat_dim_9": "case_Spend_classification_text",
     "cat_dim_10": "case_Source",
-    "cat_dim_11": "case_GR_Based_Inv_Verif.",
     "cat_dim_12": "case_Goods_Receipt",
     "num_dim_1": "event_Cumulative_net_worth_(EUR)"
 }

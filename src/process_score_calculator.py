@@ -52,8 +52,8 @@ class ProcessScoreCalculator:
                 
                 self.data = all_scores
 
-def prepare_calculations(MAC=False, DataName="sample", layer=None, index='case_id', grouped=False,view=None):
-    data_handler = DataHandler(MAC=MAC, DataName=DataName, layer=layer, pivot_cat=index)
+def prepare_calculations( DataName="sample", layer=None, index='case_id', grouped=False,view=None):
+    data_handler = DataHandler(DataName=DataName, layer=layer, pivot_cat=index)
     data, weights_yaml, log, json_file = data_handler.load_data()
     pivot_table_frequence = data_handler.pivot_table_frequencies(cat='cat_dim_6')
     pivot_table_timestamps = data_handler.pivot_table_timestamps(cat='cat_dim_6')

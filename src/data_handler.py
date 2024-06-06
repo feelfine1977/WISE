@@ -3,11 +3,12 @@ import json
 import pm4py
 import yaml
 
+from helper import load_settings
+
 class DataHandler:
-    def __init__(self, MAC=True, DataName="BPIC_2019", layer="Generalized_Process_Standard_General", base_path=None, pivot_cat='case_id'):
-        self.MAC = MAC
+    def __init__(self, DataName="BPIC_2019", layer="Generalized_Process_Standard_General", base_path=None, pivot_cat='case_id'):
         self.DataName = DataName
-        self.base_path = base_path if base_path else self._determine_base_path(MAC)
+        self.base_path = base_path if base_path else self._determine_base_path()
         self.data = None
         self.log = None
         self.layer = layer
@@ -16,8 +17,9 @@ class DataHandler:
         self.json = None
         
 
-    def _determine_base_path(self, MAC):
-        return '/Users/urszulajessen/code/gitHub/WISE/data/' if MAC else 'D:\\Code\\PHD\\WISE\\data\\'
+    def _determine_base_path(self):
+        settings = load_settings()
+        return settings.get('data_path')
 
     def load_data(self):
         paths = self._get_data_paths()
@@ -30,10 +32,7 @@ class DataHandler:
         return self.data,  self.weights_yaml, self.log, self._load_json(paths['json'])
 
     def _get_data_paths(self):
-        if self.MAC:
-            base_path = f'{self.base_path}data_{self.DataName}/'
-        else:
-            base_path = f'{self.base_path}data_{self.DataName}\\'
+        base_path = f'{self.base_path}data_{self.DataName}/'
         return {
             'csv': f'{base_path}{self.DataName}.csv',
             'json': f'{base_path}{self.DataName}.json',

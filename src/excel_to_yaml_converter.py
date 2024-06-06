@@ -1,5 +1,6 @@
 import pandas as pd
 import yaml
+from helper import load_settings
 
 class ExcelToYAMLConverter:
     def __init__(self, file_path):
@@ -34,7 +35,9 @@ class ExcelToYAMLConverter:
 
                    
 if __name__ == "__main__":
-    path = "D:\\Code\\PHD\\WISE\\data\\data_BPIC_2019\\WISE_Framework_BPIC_2019.xlsx"
+    settings = load_settings()
+    path_base = settings.get('data_path')
+    path = f"{path_base}data_BPIC_2019//WISE_Framework_BPIC_2019.xlsx"
     converter = ExcelToYAMLConverter(path)
     category_standard = converter.generate_category('Standard', {
     'Foundational_Scores': ('Foundational Scores', 'found'),
@@ -44,6 +47,5 @@ if __name__ == "__main__":
     'Exclusion_Scores': ('Exclusion Scores', 'exclusion'),
     'Change_Scores' : ('Change Scores', 'exclusion'),
 })
-    
-converter.add_layer('General_Process_Standards', category_standard)
-converter.save_to_yaml('D:\\Code\\PHD\\WISE\\data\\data_BPIC_2019\\BPIC_2019_weights.yaml')
+    converter.add_layer('General_Process_Standards', category_standard)
+    converter.save_to_yaml(f'{path_base}data_BPIC_2019/BPIC_2019_weights.yaml')

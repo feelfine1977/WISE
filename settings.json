@@ -1,5 +1,6 @@
 {
-    "data_path": "/Users/urszulajessen/code/gitHub/WISE/data/",
-    "reports_path": "/Users/urszulajessen/code/gitHub/WISE/src/reports_helper",
+    "data_path": "path/to/your/data",
+    "reports_path": "path/to/your/reports",
     "log_path": "path/to/your/logs"
+
 }

@@ -32,7 +32,22 @@ To create a new conda environment for the WISE project, follow these steps:
    ```sh
    pip install -r requirements.txt
    ```
+4. **Add paths to your data in settings.json**
+settings.json should be in the root folder of the project
 
+   ```json
+   {
+    "data_path": "path/to/your/data",
+    "reports_path": "path/to/your/reports",
+    "log_path": "path/to/your/logs"
+   }
+   ```  
+{
+    "data_path": "path/to/your/data",
+    "reports_path": "path/to/your/reports",
+    "log_path": "path/to/your/logs"
+
+}
 
 ## Phase 1
 ### Create Constraints and Weights (Optional only if you want to change the constraints and weights)

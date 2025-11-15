@@ -363,7 +363,7 @@ global average for that layer:
         labels={"color": "gap (violation - global)"},
     )
     fig.update_layout(height=400, xaxis_title="Slice", yaxis_title="Layer")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     # ------------------------------------------------------------------ #
     # CONSTRAINT-LEVEL HEATMAP (within a layer)
@@ -486,7 +486,7 @@ rules are most problematic.
         xaxis_title=f"Slice ({dim_c})",
         yaxis_title=f"Constraints in layer '{layer_for_constraints}'",
     )
-    st.plotly_chart(fig_c, use_container_width=True)
+    st.plotly_chart(fig_c, width="stretch")
 
     # ------------------------------------------------------------------ #
     # BOX PLOT BY DIMENSION
@@ -523,7 +523,7 @@ and how many outliers it contains.
             yaxis_title="WISE score",
             showlegend=False,
         )
-        st.plotly_chart(fig_box, use_container_width=True)
+        st.plotly_chart(fig_box, width="stretch")
     else:
         st.info("No slice dimensions available for boxplot.")
 
@@ -577,6 +577,6 @@ with green = better and red = worse.
             xaxis_title="Scores",
             yaxis_title=dim_scores,
         )
-        st.plotly_chart(fig_scores, use_container_width=True)
+        st.plotly_chart(fig_scores, width="stretch")
     else:
         st.info("No slice dimensions available for scores heatmap.")

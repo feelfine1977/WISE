@@ -6,31 +6,28 @@ from wise.ui.norm_page import render_norm_page
 from wise.ui.results_page import render_results_page
 
 
-
 def main():
-    st.set_page_config(page_title="WISE", layout="wide")
-    st.title("WISE – Norm-based Prioritization")
+    st.set_page_config(
+        page_title="WISE – Norm-based Prioritization",
+        layout="wide",
+    )
 
     st.sidebar.header("Navigation")
     page = st.sidebar.radio(
         "Go to",
-        [
-            "1. Data & Mapping",
-            "2. Norm",
-            "3. Results",
-        ],
+        ["Data & Mapping", "Norm", "Results"],
     )
 
-    st.sidebar.markdown("---")
     if st.sidebar.button("Reset WISE state"):
         state.reset_all()
-        st.experimental_rerun()
+        # In modern Streamlit, experimental_rerun is replaced by rerun()
+        st.rerun()
 
-    if page.startswith("1."):
+    if page == "Data & Mapping":
         render_data_page()
-    elif page.startswith("2."):
+    elif page == "Norm":
         render_norm_page()
-    elif page.startswith("3."):
+    else:
         render_results_page()
 
 

@@ -1,43 +1,43 @@
-Layers:
-  - Layer: General_Process_Standards
-    Categories:
-      - Category: Standard
-        Foundational_Scores:
+Methods_Weights:
+  - Method: General_Process_Standards
+    Views:
+      - View: Financial
+        L1_Presence:
           events: ["Create Purchase Order Item", "Vendor creates invoice", "Record Goods Receipt", "Clear Invoice"]
           weights: [0.25, 0.25, 0.25, 0.25]
-        Sequential_Scores:
+        L2_Order_Lag:
           events: [["Create Purchase Order Item", "Vendor creates invoice"], ["Vendor creates invoice", "Record Goods Receipt"], ["Record Goods Receipt", "Clear Invoice"]]
           weights: [0.333, 0.333, 0.334]
-        Equilibrium_Scores:
+        L3_Balance:
           events: ["Create Purchase Order Item", "Vendor creates invoice", "Record Goods Receipt", "Clear Invoice"]
           weights: [0.25, 0.25, 0.25, 0.25]
-        Singular_Scores:
+        L4_Singularity:
           events: ["Record Goods Receipt", "Clear Invoice"]
           weights: [0.5, 0.5]
-        Exclusion_Scores:
+        L5_Exclusion:
           events: ["Delete Purchase Order Item", "Change Price", "Change Storage Location", "Change Currency", "Change payment term", "Change Incoterms", "Change Rejection Indicator", "Change Approval for Purchase Order", "Change Quantity", "Change Material", "Change Vendor", "Change Purchase Order Item", "Cancel Goods Receipt", "Cancel Invoice Receipt"]
           weights: [0.071, 0.071, 0.071, 0.071, 0.071, 0.071, 0.071, 0.071, 0.071, 0.071, 0.071, 0.071, 0.071, 0.071]
 
-      - Category: Service
-        Foundational_Scores:
+      - View: Operations
+        L1_Presence:
           events: ["Create Purchase Order Item", "Record Goods Receipt", "Record Service Entry Sheet"]
           weights: [0.1, 0.5, 0.7]
-        Sequential_Scores:
+        L2_Order_Lag:
           events: [["Create Purchase Order Item", "Vendor creates invoice"], ["Record Goods Receipt", "Clear Invoice"]]
           weights: [0.5, 0.5]
-        Equilibrium_Scores:
+        L3_Balance:
           events: ["Create Purchase Order Item", "Vendor creates invoice"]
           weights: [0.5, 0.5]
-        Singular_Scores:
+        L4_Singularity:
           events: ["Record Goods Receipt", "Clear Invoice"]
           weights: [0.5, 0.5]
-        Exclusion_Scores:
+        L5_Exclusion:
           events: ["Delete Purchase Order Item", "Change Price", "Change Storage Location", "Change Currency"]
           weights: [0.25, 0.25, 0.25, 0.25]
 
-  - Layer: Generalized_Process_Standard_Costs
-    Categories:
-      - Category: Standard
+  - Method: Generalized_Process_Standard_Costs
+    Views:
+      - View: Standard
         Foundational_Scores:
           events: ["Create Purchase Order Item", "Vendor creates invoice", "Record Goods Receipt", "Clear Invoice"]
           weights: [0.25, 0.25, 0.25, 0.25]
@@ -54,7 +54,7 @@ Layers:
           events: ["Delete Purchase Order Item", "Change Price", "Change Storage Location", "Change Currency", "Change payment term", "Change Incoterms", "Change Rejection Indicator", "Change Approval for Purchase Order", "Change Quantity", "Change Material", "Change Vendor", "Change Purchase Order Item", "Cancel Goods Receipt", "Cancel Invoice Receipt"]
           weights: [0.071, 0.071, 0.071, 0.071, 0.071, 0.071, 0.071, 0.071, 0.071, 0.071, 0.071, 0.071, 0.071, 0.071]
 
-      - Category: Service
+      - View: Service
         Foundational_Scores:
           events: ["Create Purchase Order Item", "Record Goods Receipt"]
           weights: [0.5, 0.5]

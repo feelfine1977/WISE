@@ -4,6 +4,7 @@ from wise.ui import state
 from wise.ui.data_page import render_data_page
 from wise.ui.norm_page import render_norm_page
 from wise.ui.results_page import render_results_page
+from wise.ui.refinement_page import render_refinement_page
 
 
 def main():
@@ -15,20 +16,21 @@ def main():
     st.sidebar.header("Navigation")
     page = st.sidebar.radio(
         "Go to",
-        ["Data & Mapping", "Norm", "Results"],
+        ["Data & Mapping", "Norm", "Results", "Refinement"],
     )
 
     if st.sidebar.button("Reset WISE state"):
         state.reset_all()
-        # In modern Streamlit, experimental_rerun is replaced by rerun()
         st.rerun()
 
     if page == "Data & Mapping":
         render_data_page()
     elif page == "Norm":
         render_norm_page()
-    else:
+    elif page == "Results":
         render_results_page()
+    else:
+        render_refinement_page()
 
 
 if __name__ == "__main__":

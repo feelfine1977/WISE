@@ -120,3 +120,5 @@ wcwidth
 widgetsnbextension==4.0.10
 xgboost==2.0.3
 zipp
+scikit-learn 
+shap

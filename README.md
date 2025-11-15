@@ -169,20 +169,28 @@ The app has three main pages (left sidebar):
 1. **Data & Mapping**
    - Upload a CSV event log (e.g. BPIC 2019).
    - Map:
-     - Case ID → e.g. `case:concept:name`
-     - Activity → e.g. `concept:name`
-     - Timestamp → e.g. `time:timestamp`
-   - Optionally create **derived slices**:
-     - day of week / month of the first event,
-     - short/long duration based on a configurable threshold.
-   - Choose **slice dimensions** manually or let WISE auto-suggest columns
-     with low cardinality (e.g. `case_Company`, `case_Spend_area_text`).
-   - Click **“Save dataset mapping”**.
+    - Case ID → e.g. `case:concept:name`
+      - Activity → e.g. `concept:name`
+      - Timestamp → e.g. `time:timestamp`
+       - Optionally create **derived slices**:
+      - day of week / month of the first event,
+      - short/long duration based on a configurable threshold.
+       - Choose **slice dimensions** manually or let WISE auto-suggest columns
+      with low cardinality (e.g. `case_Company`, `case_Spend_area_text`).
+       - Click **"Save dataset mapping"**.
 
-2. **Norm**
-   - **Views tab**: define stakeholder views (Finance, Logistics, …) or load an
-     existing norm JSON.
-   - **Constraints tab**:
+       ![Data mapping interface](img/image.png)
+
+       ![Data mapping interface](img/MapColumns.png)
+
+      ![Data mapping interface](img/SliceDimensions.png)
+    2. **Norm**
+       - **Views tab**: define stakeholder views (Finance, Logistics, …) or load an
+      existing norm JSON.
+
+      ![Data mapping interface](img/LoadPN.png)
+
+       - **Constraints tab**:
      - Use expanders to add constraints per layer:
        - Presence (L1),
        - Order/Lag (L2),
@@ -191,27 +199,35 @@ The app has three main pages (left sidebar):
        - Exclusion (L5).
      - Activity names are suggested from your event log.
      - A “Current constraints” table shows each constraint with a human-readable description.
+    ![Data mapping interface](img/Constraints.png)
+
    - **Weights & export tab**:
      - Edit a **constraint × view** weight table. Each weight is a discrete value
        in **0.0–1.0** (steps of 0.1).
      - Click **“Use this norm in WISE”** to feed it into the Results page.
      - Click **“Download norm as JSON”** to save it as `WISE_norm.json`.
-
+    ![Data mapping interface](img/Weights.png)
 3. **Results**
    - Choose a **view** (e.g. Finance, Logistics).
    - Optionally tune the **layer sliders** (global what-if):
      - 0 → ignore this layer,
      - 1 → use original view weights,
      - >1 → boost the layer’s importance.
+     ![Data mapping interface](img/Results1.png)
    - Choose **shrinkage k** (Empirical-Bayes stabilisation across slices).
    - Click **“Compute scores and priorities”**.
    - Explore:
      - **Slice-level table** with `n_cases`, `mean_score`, `gap`, `PI`.
      - **Top slices by PI** bar chart.
      - **Layer × slice heatmap** (full key or single dimension).
+     ![Data mapping interface](img/Results2.png)
      - **Constraint × slice heatmap** within a selected layer.
+     ![Data mapping interface](img/Results3.png)
+     ![Data mapping interface](img/Results4.png)
      - **Boxplot by dimension** (distribution of case scores per category).
+    ![Data mapping interface](img/Results5.png)     
      - **Scores heatmap by dimension** (similar to earlier `cat_dim` notebook plots).
+     ![Data mapping interface](img/Results4.png)
 
 You can always hit **“Reset WISE state”** in the sidebar to clear all
 uploaded data, norms, and results.

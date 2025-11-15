@@ -1,11 +1,11 @@
 import json
-from typing import Dict, List
+from typing import Dict, List, Union
 
 import pandas as pd
 import streamlit as st
 
 from wise.io.norm_loader import load_norm_from_json
-from wise.model import Constraint, Norm, View
+from wise.model import Constraint as WiseConstraint, Norm, View
 from wise.ui import state
 
 
@@ -55,23 +55,92 @@ def _set_builder_constraints(constraints: List[Dict]):
     st.session_state[BUILDER_WEIGHTS_KEY] = None
 
 
+def _extract_view_names(norm: Norm) -> List[str]:
+    """Support norms where views are list[View] or list[str]."""
+    views = getattr(norm, "views", [])
+    if not views:
+        return []
+    first = views[0]
+    if hasattr(first, "name"):
+        return [v.name for v in views]
+    return list(views)
+
+
+def _constraint_to_dict(c: Union[WiseConstraint, Dict]) -> Dict:
+    """Convert a Constraint object or dict into a plain dict."""
+    if isinstance(c, WiseConstraint):
+        return {
+            "id": c.id,
+            "layer_id": c.layer_id,
+            "params": getattr(c, "params", {}) or {},
+            "base_weight": float(getattr(c, "base_weight", 1.0)),
+            "view_weights": getattr(c, "view_weights", {}) or {},
+        }
+    elif isinstance(c, dict):
+        return {
+            "id": c.get("id"),
+            "layer_id": c.get("layer_id"),
+            "params": c.get("params", {}) or {},
+            "base_weight": float(c.get("base_weight", 1.0)),
+            "view_weights": c.get("view_weights", {}) or {},
+        }
+    else:
+        # Fallback: try attribute access with safe defaults
+        return {
+            "id": getattr(c, "id", None),
+            "layer_id": getattr(c, "layer_id", None),
+            "params": getattr(c, "params", {}) or {},
+            "base_weight": float(getattr(c, "base_weight", 1.0)),
+            "view_weights": getattr(c, "view_weights", {}) or {},
+        }
+
+
+def _build_weights_df_from_constraints(constraints_raw: List[Dict], views: List[str]) -> pd.DataFrame:
+    """Build initial weight matrix from constraint base_weight and view_weights."""
+    data: Dict[str, Dict[str, float]] = {}
+    for cr in constraints_raw:
+        cid = cr["id"]
+        if cid is None:
+            continue
+        view_weights = cr.get("view_weights", {}) or {}
+        base_weight = float(cr.get("base_weight", 1.0))
+        row: Dict[str, float] = {}
+        for v in views:
+            if v in view_weights:
+                row[v] = float(view_weights[v])
+            else:
+                row[v] = base_weight
+        data[cid] = row
+    if not data:
+        return pd.DataFrame(columns=views)
+    return pd.DataFrame.from_dict(data, orient="index", columns=views)
+
+
 def _populate_from_norm(norm: Norm):
     """Load an existing Norm into the builder state."""
-    st.session_state[BUILDER_VIEWS_KEY] = [v.name for v in norm.views]
-    st.session_state[BUILDER_CONSTRAINTS_KEY] = []
+    # Views
+    view_names = _extract_view_names(norm)
+    st.session_state[BUILDER_VIEWS_KEY] = view_names if view_names else ["Finance", "Logistics"]
+
+    # Constraints as plain dicts
+    constraint_dicts: List[Dict] = []
     for c in norm.constraints:
-        st.session_state[BUILDER_CONSTRAINTS_KEY].append(
-            {
-                "id": c.id,
-                "layer_id": c.layer_id,
-                "params": c.params,
-                "base_weight": c.base_weight,
-                "view_weights": c.view_weights,
-            }
-        )
-    st.session_state[BUILDER_NAME_KEY] = norm.metadata.get("name", "Loaded norm")
-    st.session_state[BUILDER_WEIGHTS_KEY] = None
-    st.session_state[BUILDER_NEXT_ID_KEY] = len(norm.constraints) + 1
+        constraint_dicts.append(_constraint_to_dict(c))
+
+    st.session_state[BUILDER_CONSTRAINTS_KEY] = constraint_dicts
+    if hasattr(norm, "metadata") and isinstance(norm.metadata, dict):
+        st.session_state[BUILDER_NAME_KEY] = norm.metadata.get("name", "Loaded norm")
+    else:
+        st.session_state[BUILDER_NAME_KEY] = "Loaded norm"
+
+    # Build weights from the loaded norm (view_weights + base_weight)
+    st.session_state[BUILDER_WEIGHTS_KEY] = _build_weights_df_from_constraints(
+        constraint_dicts,
+        st.session_state[BUILDER_VIEWS_KEY],
+    )
+
+    # Update next id (for new constraints)
+    st.session_state[BUILDER_NEXT_ID_KEY] = len(constraint_dicts) + 1
 
 
 def _describe_constraint(c: Dict) -> str:
@@ -182,8 +251,8 @@ Views represent stakeholder perspectives, e.g. **Finance**, **Logistics**,
                 st.success("Norm loaded into builder and set as current WISE norm.")
                 st.json(
                     {
-                        "views": [v.name for v in norm.views],
-                        "n_constraints": len(norm.constraints),
+                        "views": _get_builder_views(),
+                        "n_constraints": len(_get_builder_constraints()),
                     }
                 )
 
@@ -416,7 +485,7 @@ uploaded event log.
             or list(weights_df.index) != ids
             or list(weights_df.columns) != views
         ):
-            weights_df = pd.DataFrame(1.0, index=ids, columns=views)
+            weights_df = _build_weights_df_from_constraints(constraints, views)
             st.session_state[BUILDER_WEIGHTS_KEY] = weights_df
 
         st.markdown(
@@ -516,7 +585,7 @@ def _build_norm_from_builder() -> Norm:
         ) if cid in weights_df.index else 1.0
 
         constraints.append(
-            Constraint(
+            WiseConstraint(
                 id=cid,
                 layer_id=cr["layer_id"],
                 params=cr["params"],

@@ -19,7 +19,7 @@ def render_data_page():
         return
 
     # Load raw CSV for preview and column selection
-    df = pd.read_csv(uploaded)
+    df = pd.read_csv(uploaded, encoding="latin1", low_memory=False)
     st.write("Preview (first 10 rows):")
     st.dataframe(df.head(10))
 
@@ -37,19 +37,19 @@ def render_data_page():
     case_id_col = st.selectbox(
         "Case ID column",
         cols,
-        index=index_or_default("case:concept:name"),
+        index=index_or_default("case concept:name"),
         help="Column that identifies individual cases (e.g., PO line id).",
     )
     activity_col = st.selectbox(
         "Activity column",
         cols,
-        index=index_or_default("concept:name"),
+        index=index_or_default("event concept:name"),
         help="Column with event / activity labels.",
     )
     timestamp_col = st.selectbox(
         "Timestamp column",
         cols,
-        index=index_or_default("time:timestamp"),
+        index=index_or_default("event time:timestamp"),
         help="Column with event timestamps (will be converted to datetime).",
     )
 

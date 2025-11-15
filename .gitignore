@@ -166,3 +166,7 @@ wise_flow/tests/explore_data.ipynb
 /wise_flow/docs
 *.ttf
 data/data_BPIC_2019/~$WISE_Framework_BPIC_2019.xlsx
+
+src/archive/*
+data/*
+merged.pdf

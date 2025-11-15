@@ -1,83 +1,298 @@
 # WISE
-Weighted Insights for Scoring Efficiency
 
-WISE-Flow (Weighted Insights for Scoring Efficiency - FLOW)
+**W**eighted **I**nsights for **S**coring **E**fficiency  
+(also used in some materials as *Weighted Insights for Evaluating Efficiency*)
 
-## Introduction - Method Description
-Anomalies in complex industrial processes are often obscured by high variability and complexity of event data, which hinders their identification and interpretation using process mining. To address this problem, we introduce WISE (Weighted Insights for Evaluating Efficiency), a novel method for analyzing business process metrics through the integration of domain knowledge, process mining, and machine learning.
+WISE is a norm-based scoring method and Python library for process mining.  
+It encodes business expectations as a set of constraints over event logs,
+scores each case against those constraints, and aggregates scores over
+business segments (“slices”) to indicate where deviations from the norm
+are both frequent and pronounced.
 
-The methodology involves defining business goals and establishing Process Norms with weighted constraints at the activity level, incorporating input from domain experts and process analysts. Individual process instances are scored based on these constraints, and the scores are normalized to identify features impacting process goals.
+The library is designed to be:
 
-Evaluation using the BPIC 2019 dataset and real industrial contexts demonstrates that WISE enhances automation in business process analysis and effectively detects deviations from desired process flows. While LLMs support the analysis, the inclusion of domain experts ensures the accuracy and relevance of the findings.
+- **Modular** – layers (presence, order, balance, etc.) are pluggable.
+- **Tool-agnostic** – works on standard case-centric event logs (CSV, XES → DataFrame).
+- **Explainable** – scores decompose into per-constraint contributions.
 
-## Installation
+The repository also contains an example analysis on the **BPIC 2019 P2P**
+dataset and optional notebooks for further experiments.
 
-### Step 1: Create a New Conda Environment
+---
 
-To create a new conda environment for the WISE project, follow these steps:
+## 1. Method overview (informal)
 
-1. **Open a terminal or command prompt.**
+In many process mining projects, event logs are explored with dashboards,
+generic PPIs, and ad-hoc rules. This often yields interesting diagnostics but
+does not provide a small, auditable list of **where to act first**.
 
-2. **Create a new conda environment:**
+WISE takes a different route:
 
-   ```sh
-   conda create --name WISE python=3.8
-   Activate the newly created environment:
+1. **Define a process norm**  
+   Business goals (e.g. “reliable three-way matching”, “less rework”) are
+   translated into a set of constraints grouped into *layers* such as:
 
-   ```sh
-    conda activate WISE
-    ```
-3. **Install the required packages:**
+   - *Presence* – mandatory steps should occur.
+   - *Order/Lag* – steps should occur in the right order and within a lag.
+   - *Balance* – quantities/amounts should “add up”.
+   - *Singularity* – certain activities should not repeat.
+   - *Exclusion* – forbidden steps or patterns should not occur.
 
-   ```sh
-   pip install -r requirements.txt
-   ```
-4. **Add paths to your data in settings.json**
-settings.json should be in the root folder of the project
+   Each constraint can have different weights per *view* (e.g. Finance vs Logistics).
 
-   ```json
-   {
-    "data_path": "path/to/your/data",
-    "reports_path": "path/to/your/reports",
-    "log_path": "path/to/your/logs"
-   }
-   ```  
+2. **Score cases against the norm**  
+   For each case (trace), WISE computes a bounded violation for each
+   constraint and aggregates them into a case score per view.
+
+3. **Aggregate by slices and compute a Priority Index**  
+   Cases are grouped into slices (e.g. `company × spend area × matching regime`).
+   For each slice, WISE computes:
+
+   - the average case score,
+   - the gap to the global mean,
+   - and a simple **Priority Index**: `PI = number_of_cases × gap`.
+
+   This helps answer “which segments are furthest from the norm and affect the
+   most cases?”.
+
+WISE focuses on **descriptive** prioritisation. It does not estimate causal
+effects of interventions; those remain the task of further analysis and
+experimentation.
+
+---
+
+## 2. Repository structure
+
+The core code is organised as a Python package:
+
+```text
+src/
+  wise/
+    __init__.py
+    model.py        # Norm, Constraint, View data structures
+    norm.py         # view-weight aggregation and helpers
+    layers/         # pluggable layer implementations
+      base.py       # BaseLayer interface
+      presence.py
+      order_lag.py
+      balance.py
+      singularity.py
+      exclusion.py
+    io/
+      log_loader.py   # event log loading
+      norm_loader.py  # norm loading (JSON, etc.)
+    scoring/
+      scoring.py    # case-level scores
+      slices.py     # slice-level aggregation & PI
+      eb.py         # empirical-Bayes shrinkage
+      bootstrap.py  # optional confidence intervals
+    ui/
+      streamlit_app_placeholder.py  # placeholder for a future UI
+
+tests/
+  conftest.py
+  test_presence_layer.py
+  test_norm_loader.py
+  test_scoring.py
+
+data/
+  BPIC_2019.csv         # example event log (not included in repo by default)
+  WISE_norm.json        # example norm for BPIC 2019
+  ...                   # optional: outputs (case scores, slice summary)
+
+main.py                 # example script for running WISE on BPIC 2019
+pyproject.toml          # build configuration
+requirements.txt        # extra dependencies
+README.md
+```
+
+## 3. Installation
+### 3.1. Create and activate a virtual environment
+You can use conda (shown here) or any other virtual env manager.
+
+```bash
+conda create -n wise-env python=3.10
+conda activate wise-env
+```
+
+### 3.2. Install dependencies
+```bash
+pip install -r requirements.txt
+pip install -e .
+```
+The second command installs WISE as an editable package so you can import
+wise from your own scripts and notebooks.
+
+### 3.3 Run tests to verify installation
+```bash
+pytest
+```
+If tests pass, the core library is installed correctly.
+
+## 4. Using WISE with BPIC 2019 (example)
+
+### 4.1. Prepare data and a process norm
+
+Place the following files in `data/`:
+
+- `data/BPIC_2019.csv` – the BPIC 2019 P2P event log (download from the BPI challenge).
+- `data/WISE_norm.json` – a norm definition for BPIC 2019.
+
+`WISE_norm.json` should follow the JSON schema expected by
+`wise.io.norm_loader`:
+
+```json
 {
-    "data_path": "path/to/your/data",
-    "reports_path": "path/to/your/reports",
-    "log_path": "path/to/your/logs"
-
+  "views": ["Finance", "Logistics"],
+  "constraints": [
+    {
+      "id": "c_l1_gr",
+      "layer_id": "presence",
+      "params": { "activity": "Record Goods Receipt" },
+      "base_weight": 1.0,
+      "view_weights": { "Finance": 0.2, "Logistics": 0.3 }
+    }
+    // ... more constraints ...
+  ]
 }
-
-## Phase 1
-### Create Constraints and Weights (Optional only if you want to change the constraints and weights)
-1. Define the constraints and weights for the process activities
-Based on the file data/data_BPIC_2019/WISE_Framework_BPIC_2019.xlsx create or change the constraints and weights for the layers.
-Example:
 ```
-Undesirable Activity	Weight
-Change Price	0,7
-Change Quantity	0,6
-Change Currency	0,75
-Change Delivery Indicator	0,4
+
+An example `WISE_norm.json` tailored to BPIC 2019 is already included in this
+repository.
+
+### 4.2. Run the example script
+
+`main.py` contains a minimal example configured for BPIC 2019.
+
+It expects the following BPIC 2019 column names:
+
+```python
+CASE_ID_COL = "case:concept:name"
+ACTIVITY_COL = "concept:name"
+TIMESTAMP_COL = "time:timestamp"
 ```
-2. Convert the Excel file to a yaml file
-Execute excel_to_yaml_converter.py
 
-### Make sure you have following data in the data folder
-data/data_BPIC_2019/BPIC_2019.csv - the event log from the BPIC 2019 challenge
-data/data_BPIC_2019/BPIC_2019.json - mappings for the features that are to be used in the analysis
-data/data_BPIC_2019/WISE_Framework_BPIC_2019.yaml - the constraints and weights for the process activities
+It uses the following slice attributes by default:
 
-### Run the WISE method
-data/results/data_analysis.ipynb - the notebook that runs the WISE method
-Caution in order to create new LLM report you have to provide OPENAI API key in the notebook!
+```python
+SLICE_COLS = [
+    "case_Company",
+    "case_Spend_area_text",
+    "case_Purch._Doc._Category_name",
+]
+```
 
-## LLM Report
-LLM Report can be found in the data/results folder
-data/results
-for generatin new LLM report you have to provide OPENAI API key in the notebook!
-you need following fonts:
-data/fonts/DejaVuSans-Bold.ttf
-data/fonts/DejaVuSans.ttf
-The fonts can be found in https://www.fontsquirrel.com/fonts/dejavu-sans
+To run the example:
+
+```bash
+python main.py
+```
+
+You should see in the terminal:
+
+- the number of events and cases loaded,
+- a preview of case scores,
+- and a table of top slices by Priority Index.
+
+The script also writes:
+
+- `data/WISE_case_scores.csv` – case-level scores;
+- `data/WISE_slice_summary.csv` – slice-level gaps and PIs.
+
+You can adjust `LOG_PATH`, `NORM_PATH`, `SLICE_COLS`, and the view name at the
+top of `main.py` to point to other logs or norms.
+
+## 5. Using WISE as a library
+
+You can also import WISE modules in your own scripts or notebooks. Example:
+
+```python
+import pandas as pd
+from wise.io.log_loader import load_event_log
+from wise.io.norm_loader import load_norm_from_json
+from wise.scoring.scoring import compute_case_scores
+from wise.scoring.slices import aggregate_slices
+
+df = load_event_log(
+    "data/BPIC_2019.csv",
+    case_id_col="case:concept:name",
+    activity_col="concept:name",
+    timestamp_col="time:timestamp",
+)
+
+with open("data/WISE_norm.json", "r", encoding="utf-8") as f:
+    norm = load_norm_from_json(f)
+
+view_name = norm.get_view_names()[0]
+
+case_scores = compute_case_scores(
+    df=df,
+    norm=norm,
+    view_name=view_name,
+    case_id_col="case:concept:name",
+    activity_col="concept:name",
+    timestamp_col="time:timestamp",
+)
+
+slice_summary = aggregate_slices(
+    df_scores=case_scores,
+    df_log=df,
+    case_id_col="case:concept:name",
+    slice_cols=["case_Company", "case_Spend_area_text"],
+    shrink_k=50.0,
+)
+print(slice_summary.head())
+```
+
+## 6. Defining norms
+
+Norms can be defined in JSON and loaded via `wise.io.norm_loader`. Each
+constraint has:
+
+- an `id` (string),
+- a `layer_id` (e.g. `"presence"`, `"order_lag"`, `"balance"`),
+- `params` (layer-specific configuration),
+- `base_weight`,
+- optional `view_weights` per view.
+
+The available layers and their expected parameters are implemented in
+`wise.layers.*`. You can add new layers by:
+
+1. Creating a new module in `src/wise/layers/` that subclasses
+   `BaseLayer` and implements `compute_violation`.
+
+2. Registering it in `wise.layers.__init__` with a unique `LAYER_ID`.
+
+## 7. Extending WISE
+
+**New layers**  
+Add a file in `wise/layers/`, implement `BaseLayer`, and register it in the
+layer registry. Use the new `layer_id` in your norm JSON.
+
+**New views**  
+Add view names to the `views` list in the norm file, and specify
+`view_weights` for constraints as needed.
+
+**Streamlit UI**  
+A placeholder UI module exists in `wise/ui/streamlit_app_placeholder.py`.
+You can build a full Streamlit app that:
+
+- uploads an event log (CSV),
+- maps case / activity / timestamp columns,
+- uploads a norm JSON,
+- selects slices and a view,
+- and displays case and slice summaries.
+
+**Notebooks**  
+You can place Jupyter notebooks under `notebooks/` and import `wise`
+from there.
+
+## 8. Status and caveats
+
+WISE is currently a research/experimental codebase. It has been applied to
+BPIC 2019 and a limited set of industrial P2P logs. The example norms and
+weights included here should be seen as starting points, not ready-made
+standards. For new contexts, norms should be adapted and reviewed with local
+domain experts.
+
+Contributions (bug reports, small PRs, or examples) are welcome.

@@ -8,6 +8,7 @@ def load_event_log(
     case_id_col: str,
     activity_col: str,
     timestamp_col: str,
+    encoding: str = "utf-8",
 ) -> pd.DataFrame:
     """
     Load a CSV event log OR normalise an already loaded DataFrame.
@@ -35,7 +36,7 @@ def load_event_log(
     if isinstance(path_or_buffer, pd.DataFrame):
         df = path_or_buffer.copy()
     else:
-        df = pd.read_csv(path_or_buffer)
+        df = pd.read_csv(path_or_buffer, encoding=encoding, low_memory=False)
 
     missing = {case_id_col, activity_col, timestamp_col} - set(df.columns)
     if missing:

@@ -1,7 +1,7 @@
 # WISE
 
 **W**eighted **I**nsights for **S**coring **E**fficiency  
-(also used in some materials as *Weighted Insights for Evaluating Efficiency*)
+(also used as *Weighted Insights for Evaluating Efficiency*)
 
 WISE is a norm-based scoring method and Python library for process mining.  
 It encodes business expectations as a set of constraints over event logs,
@@ -12,11 +12,10 @@ are both frequent and pronounced.
 The library is designed to be:
 
 - **Modular** – layers (presence, order, balance, etc.) are pluggable.
-- **Tool-agnostic** – works on standard case-centric event logs (CSV, XES → DataFrame).
-- **Explainable** – scores decompose into per-constraint contributions.
-
-The repository also contains an example analysis on the **BPIC 2019 P2P**
-dataset and optional notebooks for further experiments.
+- **Tool-agnostic** – works on standard case-centric event logs (CSV → pandas).
+- **Explainable** – scores decompose into per-constraint and per-layer contributions.
+- **Interactive** – comes with a Streamlit UI to upload logs, build norms,
+  run WISE, and explore heatmaps and boxplots.
 
 ---
 
@@ -30,11 +29,11 @@ WISE takes a different route:
 
 1. **Define a process norm**  
    Business goals (e.g. “reliable three-way matching”, “less rework”) are
-   translated into a set of constraints grouped into *layers* such as:
+   translated into a set of constraints grouped into layers such as:
 
    - *Presence* – mandatory steps should occur.
-   - *Order/Lag* – steps should occur in the right order and within a lag.
-   - *Balance* – quantities/amounts should “add up”.
+   - *Order/Lag* – steps should occur in the right order and within a time window.
+   - *Balance* – quantities or amounts should “add up” within a tolerance.
    - *Singularity* – certain activities should not repeat.
    - *Exclusion* – forbidden steps or patterns should not occur.
 
@@ -42,15 +41,16 @@ WISE takes a different route:
 
 2. **Score cases against the norm**  
    For each case (trace), WISE computes a bounded violation for each
-   constraint and aggregates them into a case score per view.
+   constraint and aggregates them into a case-level score per view.
 
-3. **Aggregate by slices and compute a Priority Index**  
+3. **Aggregate by slices and compute a Priority Index (PI)**  
    Cases are grouped into slices (e.g. `company × spend area × matching regime`).
    For each slice, WISE computes:
 
    - the average case score,
    - the gap to the global mean,
-   - and a simple **Priority Index**: `PI = number_of_cases × gap`.
+   - and a simple **Priority Index**:  
+     `PI = number_of_cases × gap`.
 
    This helps answer “which segments are furthest from the norm and affect the
    most cases?”.
@@ -61,7 +61,7 @@ experimentation.
 
 ---
 
-## 2. Repository structure
+## 2. Repository structure (simplified)
 
 The core code is organised as a Python package:
 
@@ -69,25 +69,29 @@ The core code is organised as a Python package:
 src/
   wise/
     __init__.py
-    model.py        # Norm, Constraint, View data structures
-    norm.py         # view-weight aggregation and helpers
-    layers/         # pluggable layer implementations
-      base.py       # BaseLayer interface
+    model.py           # Norm, Constraint, View data structures
+    norm.py            # view-weight aggregation and helpers
+    layers/            # pluggable layer implementations
+      base.py          # BaseLayer interface
       presence.py
       order_lag.py
       balance.py
       singularity.py
       exclusion.py
     io/
-      log_loader.py   # event log loading
-      norm_loader.py  # norm loading (JSON, etc.)
+      log_loader.py    # event log loading & normalisation
+      norm_loader.py   # norm loading (JSON, etc.)
     scoring/
-      scoring.py    # case-level scores
-      slices.py     # slice-level aggregation & PI
-      eb.py         # empirical-Bayes shrinkage
-      bootstrap.py  # optional confidence intervals
+      scoring.py       # case-level scores + per-layer/constraint violations
+      slices.py        # slice-level aggregation & PI, slice-layer matrices
+      eb.py            # empirical-Bayes shrinkage
+      bootstrap.py     # optional confidence intervals
     ui/
-      streamlit_app_placeholder.py  # placeholder for a future UI
+      app.py           # Streamlit entrypoint
+      state.py         # shared session state helpers
+      data_page.py     # upload & mapping UI
+      norm_page.py     # interactive norm builder
+      results_page.py  # scoring, heatmaps, boxplots
 
 tests/
   conftest.py
@@ -96,115 +100,127 @@ tests/
   test_scoring.py
 
 data/
-  BPIC_2019.csv         # example event log (not included in repo by default)
-  WISE_norm.json        # example norm for BPIC 2019
-  ...                   # optional: outputs (case scores, slice summary)
+  BPIC_2019.csv        # (optional) example event log – not in repo by default
+  WISE_norm.json       # (optional) example norm
+  ...                  # optional: outputs (case scores, slice summary, etc.)
 
-main.py                 # example script for running WISE on BPIC 2019
-pyproject.toml          # build configuration
-requirements.txt        # extra dependencies
+pyproject.toml         # build configuration
+requirements.txt       # dependencies
 README.md
 ```
 
+---
+
 ## 3. Installation
+
+You need **Python 3.10+** and either `conda` or `venv`.  
+The examples below use `conda`, but any virtual environment manager works.
+
 ### 3.1. Create and activate a virtual environment
-You can use conda (shown here) or any other virtual env manager.
 
 ```bash
 conda create -n wise-env python=3.10
 conda activate wise-env
 ```
 
-### 3.2. Install dependencies
+### 3.2. Install dependencies and the package
+
+From the repository root:
+
 ```bash
 pip install -r requirements.txt
 pip install -e .
 ```
-The second command installs WISE as an editable package so you can import
-wise from your own scripts and notebooks.
 
-### 3.3 Run tests to verify installation
+The second command installs WISE as an editable package so you can import
+`wise` from your own scripts, notebooks, or the Streamlit app.
+
+### 3.3. Run tests (optional but recommended)
+
 ```bash
 pytest
 ```
+
 If tests pass, the core library is installed correctly.
 
-## 4. Using WISE with BPIC 2019 (example)
+---
 
-### 4.1. Prepare data and a process norm
+## 4. Starting the Streamlit UI
 
-Place the following files in `data/`:
-
-- `data/BPIC_2019.csv` – the BPIC 2019 P2P event log (download from the BPI challenge).
-- `data/WISE_norm.json` – a norm definition for BPIC 2019.
-
-`WISE_norm.json` should follow the JSON schema expected by
-`wise.io.norm_loader`:
-
-```json
-{
-  "views": ["Finance", "Logistics"],
-  "constraints": [
-    {
-      "id": "c_l1_gr",
-      "layer_id": "presence",
-      "params": { "activity": "Record Goods Receipt" },
-      "base_weight": 1.0,
-      "view_weights": { "Finance": 0.2, "Logistics": 0.3 }
-    }
-    // ... more constraints ...
-  ]
-}
-```
-
-An example `WISE_norm.json` tailored to BPIC 2019 is already included in this
-repository.
-
-### 4.2. Run the example script
-
-`main.py` contains a minimal example configured for BPIC 2019.
-
-It expects the following BPIC 2019 column names:
-
-```python
-CASE_ID_COL = "case:concept:name"
-ACTIVITY_COL = "concept:name"
-TIMESTAMP_COL = "time:timestamp"
-```
-
-It uses the following slice attributes by default:
-
-```python
-SLICE_COLS = [
-    "case_Company",
-    "case_Spend_area_text",
-    "case_Purch._Doc._Category_name",
-]
-```
-
-To run the example:
+The Streamlit app is the easiest way to use WISE:
 
 ```bash
-python main.py
+conda activate wise-env
+streamlit run src/wise/ui/app.py
 ```
 
-You should see in the terminal:
+Streamlit will print a local URL, typically:
 
-- the number of events and cases loaded,
-- a preview of case scores,
-- and a table of top slices by Priority Index.
+```text
+Local URL: http://localhost:8501
+```
 
-The script also writes:
+Open this in your browser.
 
-- `data/WISE_case_scores.csv` – case-level scores;
-- `data/WISE_slice_summary.csv` – slice-level gaps and PIs.
+### 4.1. Workflow inside the app
 
-You can adjust `LOG_PATH`, `NORM_PATH`, `SLICE_COLS`, and the view name at the
-top of `main.py` to point to other logs or norms.
+The app has three main pages (left sidebar):
 
-## 5. Using WISE as a library
+1. **Data & Mapping**
+   - Upload a CSV event log (e.g. BPIC 2019).
+   - Map:
+     - Case ID → e.g. `case:concept:name`
+     - Activity → e.g. `concept:name`
+     - Timestamp → e.g. `time:timestamp`
+   - Optionally create **derived slices**:
+     - day of week / month of the first event,
+     - short/long duration based on a configurable threshold.
+   - Choose **slice dimensions** manually or let WISE auto-suggest columns
+     with low cardinality (e.g. `case_Company`, `case_Spend_area_text`).
+   - Click **“Save dataset mapping”**.
 
-You can also import WISE modules in your own scripts or notebooks. Example:
+2. **Norm**
+   - **Views tab**: define stakeholder views (Finance, Logistics, …) or load an
+     existing norm JSON.
+   - **Constraints tab**:
+     - Use expanders to add constraints per layer:
+       - Presence (L1),
+       - Order/Lag (L2),
+       - Balance (L3, using numeric quantity columns),
+       - Singularity (L4),
+       - Exclusion (L5).
+     - Activity names are suggested from your event log.
+     - A “Current constraints” table shows each constraint with a human-readable description.
+   - **Weights & export tab**:
+     - Edit a **constraint × view** weight table. Each weight is a discrete value
+       in **0.0–1.0** (steps of 0.1).
+     - Click **“Use this norm in WISE”** to feed it into the Results page.
+     - Click **“Download norm as JSON”** to save it as `WISE_norm.json`.
+
+3. **Results**
+   - Choose a **view** (e.g. Finance, Logistics).
+   - Optionally tune the **layer sliders** (global what-if):
+     - 0 → ignore this layer,
+     - 1 → use original view weights,
+     - >1 → boost the layer’s importance.
+   - Choose **shrinkage k** (Empirical-Bayes stabilisation across slices).
+   - Click **“Compute scores and priorities”**.
+   - Explore:
+     - **Slice-level table** with `n_cases`, `mean_score`, `gap`, `PI`.
+     - **Top slices by PI** bar chart.
+     - **Layer × slice heatmap** (full key or single dimension).
+     - **Constraint × slice heatmap** within a selected layer.
+     - **Boxplot by dimension** (distribution of case scores per category).
+     - **Scores heatmap by dimension** (similar to earlier `cat_dim` notebook plots).
+
+You can always hit **“Reset WISE state”** in the sidebar to clear all
+uploaded data, norms, and results.
+
+---
+
+## 5. Using WISE programmatically
+
+You can also import and use WISE in your own Python code, without the UI.
 
 ```python
 import pandas as pd
@@ -213,6 +229,7 @@ from wise.io.norm_loader import load_norm_from_json
 from wise.scoring.scoring import compute_case_scores
 from wise.scoring.slices import aggregate_slices
 
+# 1. Load event log
 df = load_event_log(
     "data/BPIC_2019.csv",
     case_id_col="case:concept:name",
@@ -220,11 +237,13 @@ df = load_event_log(
     timestamp_col="time:timestamp",
 )
 
+# 2. Load process norm
 with open("data/WISE_norm.json", "r", encoding="utf-8") as f:
     norm = load_norm_from_json(f)
 
-view_name = norm.get_view_names()[0]
+view_name = norm.get_view_names()[0]  # e.g. "Finance"
 
+# 3. Case-level scores
 case_scores = compute_case_scores(
     df=df,
     norm=norm,
@@ -234,6 +253,7 @@ case_scores = compute_case_scores(
     timestamp_col="time:timestamp",
 )
 
+# 4. Slice-level aggregation
 slice_summary = aggregate_slices(
     df_scores=case_scores,
     df_log=df,
@@ -241,51 +261,77 @@ slice_summary = aggregate_slices(
     slice_cols=["case_Company", "case_Spend_area_text"],
     shrink_k=50.0,
 )
+
 print(slice_summary.head())
 ```
 
-## 6. Defining norms
+---
 
-Norms can be defined in JSON and loaded via `wise.io.norm_loader`. Each
-constraint has:
+## 6. Defining norms via JSON
 
-- an `id` (string),
-- a `layer_id` (e.g. `"presence"`, `"order_lag"`, `"balance"`),
-- `params` (layer-specific configuration),
-- `base_weight`,
-- optional `view_weights` per view.
+Norms can be defined in JSON and loaded via `wise.io.norm_loader`.
+The Streamlit builder produces files that follow this schema:
 
-The available layers and their expected parameters are implemented in
-`wise.layers.*`. You can add new layers by:
+```json
+{
+  "metadata": {
+    "name": "P2P baseline norm"
+  },
+  "views": ["Finance", "Logistics"],
+  "constraints": [
+    {
+      "id": "c001",
+      "layer_id": "presence",
+      "params": { "activity": "Record Goods Receipt" },
+      "base_weight": 1.0,
+      "view_weights": { "Finance": 0.2, "Logistics": 0.3 }
+    },
+    {
+      "id": "c002",
+      "layer_id": "order_lag",
+      "params": {
+        "activity_from": "Record Goods Receipt",
+        "activity_to": "Record Invoice Receipt",
+        "max_days": 10
+      },
+      "base_weight": 1.0,
+      "view_weights": { "Finance": 0.3, "Logistics": 0.4 }
+    }
+    // ... more constraints ...
+  ]
+}
+```
 
-1. Creating a new module in `src/wise/layers/` that subclasses
-   `BaseLayer` and implements `compute_violation`.
+Each constraint has:
 
-2. Registering it in `wise.layers.__init__` with a unique `LAYER_ID`.
+- `id` – unique identifier.
+- `layer_id` – one of the registered layers
+  (`presence`, `order_lag`, `balance`, `singularity`, `exclusion`, …).
+- `params` – layer-specific configuration.
+- `base_weight` – default importance.
+- `view_weights` – optional overrides per view.
+
+You can edit these JSON files by hand or use the Streamlit norm builder to
+create and export them.
+
+---
 
 ## 7. Extending WISE
 
-**New layers**  
-Add a file in `wise/layers/`, implement `BaseLayer`, and register it in the
-layer registry. Use the new `layer_id` in your norm JSON.
+- **New layers**  
+  Add a file in `src/wise/layers/` that subclasses `BaseLayer` and implements
+  `compute_violation(trace, constraint, activity_col, timestamp_col)`.  
+  Register the layer’s `LAYER_ID` in `wise.layers.__init__` and use it in norms.
 
-**New views**  
-Add view names to the `views` list in the norm file, and specify
-`view_weights` for constraints as needed.
+- **New views**  
+  Add view names to the `views` list in the norm file, and specify
+  `view_weights` for constraints as needed.
 
-**Streamlit UI**  
-A placeholder UI module exists in `wise/ui/streamlit_app_placeholder.py`.
-You can build a full Streamlit app that:
+- **New visuals / analyses**  
+  The Streamlit app is modular: you can add pages or sections that reuse
+  `case_scores` and slice matrices for your own charts.
 
-- uploads an event log (CSV),
-- maps case / activity / timestamp columns,
-- uploads a norm JSON,
-- selects slices and a view,
-- and displays case and slice summaries.
-
-**Notebooks**  
-You can place Jupyter notebooks under `notebooks/` and import `wise`
-from there.
+---
 
 ## 8. Status and caveats
 
@@ -295,4 +341,4 @@ weights included here should be seen as starting points, not ready-made
 standards. For new contexts, norms should be adapted and reviewed with local
 domain experts.
 
-Contributions (bug reports, small PRs, or examples) are welcome.
+Contributions (bug reports, small PRs, or examples) are very welcome.

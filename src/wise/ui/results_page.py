@@ -243,7 +243,6 @@ global average for that layer:
         st.info("No slice dimensions defined; cannot build heatmap.")
         return
 
-    # Heatmap mode
     mode = st.radio(
         "Heatmap mode",
         ["All slice dimensions (full key)", "Single dimension"],
@@ -286,7 +285,6 @@ global average for that layer:
         st.info("No slice-layer data available for heatmap.")
         return
 
-    # Reprioritisation controls
     st.markdown("**Reprioritisation controls**")
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -360,7 +358,7 @@ global average for that layer:
 
     fig = px.imshow(
         heatmap_df,
-        color_continuous_scale="RdYlGn_r",  # green = better (lower gap), red = worse
+        color_continuous_scale="RdYlGn_r",  # green = better, red = worse
         aspect="auto",
         labels={"color": "gap (violation - global)"},
     )

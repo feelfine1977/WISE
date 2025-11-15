@@ -8,13 +8,11 @@ from wise.scoring.scoring import compute_case_scores
 from wise.scoring.slices import (
     aggregate_slices,
     compute_slice_layer_matrix,
-    compute_slice_constraint_matrix,  
+    compute_slice_constraint_matrix,
     rank_slices,
 )
-
 from wise.norm import compute_view_weights
 from wise.ui import state
-
 
 
 def render_results_page():
@@ -160,7 +158,9 @@ def _run_wise_and_show(ds, norm, view_name: str, layer_factors: Dict[str, float]
 
     if not ds.slice_cols:
         st.info("No slice dimensions defined; only case scores are available.")
-        state.set_results_state(view_name, case_scores, None, params={"shrink_k": shrink_k})
+        state.set_results_state(
+            view_name, case_scores, None, params={"shrink_k": shrink_k}
+        )
         return
 
     with st.spinner("Aggregating slices..."):
@@ -180,7 +180,6 @@ def _run_wise_and_show(ds, norm, view_name: str, layer_factors: Dict[str, float]
     )
 
     _show_existing_results(state.get_results_state(), ds, norm, case_scores=case_scores)
-
 
 
 def _show_existing_results(results_state, ds, norm, case_scores=None):
@@ -204,7 +203,7 @@ def _show_existing_results(results_state, ds, norm, case_scores=None):
 
     slice_cols = ds.slice_cols
 
-    # Simple bar chart of PI
+    # Bar chart of PI
     st.subheader("Top slices by PI")
     if slice_cols and results_state.slice_summary is not None and not results_state.slice_summary.empty:
         tmp = results_state.slice_summary.copy()
@@ -223,7 +222,7 @@ def _show_existing_results(results_state, ds, norm, case_scores=None):
         case_scores = results_state.case_scores
 
     # ------------------------------------------------------------------ #
-    # LAYER-LEVEL HEATMAP (as before)
+    # LAYER-LEVEL HEATMAP
     # ------------------------------------------------------------------ #
     st.subheader("Layer × slice heatmap")
     st.markdown(
@@ -244,7 +243,7 @@ global average for that layer:
         st.info("No slice dimensions defined; cannot build heatmap.")
         return
 
-    # Choose heatmap mode
+    # Heatmap mode
     mode = st.radio(
         "Heatmap mode",
         ["All slice dimensions (full key)", "Single dimension"],
@@ -268,13 +267,13 @@ global average for that layer:
             help="Pick one attribute, e.g. vendor or spend area, to compare its categories.",
         )
         key_cols = [dim]
-        shrink_k = results_state.params.get("shrink_k", 0.0)
+        shrink_k_dim = results_state.params.get("shrink_k", 0.0)
         ranking_source = aggregate_slices(
             df_scores=case_scores,
             df_log=ds.df,
             case_id_col=ds.case_id_col,
             slice_cols=key_cols,
-            shrink_k=shrink_k,
+            shrink_k=shrink_k_dim,
         )
         slice_layer = compute_slice_layer_matrix(
             df_scores=case_scores,
@@ -287,7 +286,7 @@ global average for that layer:
         st.info("No slice-layer data available for heatmap.")
         return
 
-    # Reprioritisation controls for layer-level heatmap
+    # Reprioritisation controls
     st.markdown("**Reprioritisation controls**")
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -361,7 +360,7 @@ global average for that layer:
 
     fig = px.imshow(
         heatmap_df,
-        color_continuous_scale="RdYlGn_r",  # green = better, red = worse
+        color_continuous_scale="RdYlGn_r",  # green = better (lower gap), red = worse
         aspect="auto",
         labels={"color": "gap (violation - global)"},
     )
@@ -375,24 +374,22 @@ global average for that layer:
     st.markdown(
         """
 Use this view to drill down inside a specific layer.  
-For example: select `presence` to see **each presence constraint** (GR, INV, CLEAR, …)
+For example: select `presence` to see each presence constraint (GR, INV, CLEAR, …)
 for the same slices, or select `exclusion` or `order_lag` to see which concrete
 rules are most problematic.
         """
     )
 
-    # choose dimension for constraint view
     dim_c = st.selectbox(
         "Dimension for constraint heatmap",
         slice_cols,
         help="For example: vendor or spend area.",
     )
 
-    # choose layer to drill into
-    layer_ids = sorted({c.layer_id for c in norm.constraints})
+    layer_ids_all = sorted({c.layer_id for c in norm.constraints})
     layer_for_constraints = st.selectbox(
         "Layer",
-        layer_ids,
+        layer_ids_all,
         help="Only constraints from this layer will appear as rows in the heatmap.",
     )
 
@@ -465,8 +462,10 @@ rules are most problematic.
         st.info("No slices left after selection in constraint view.")
         return
 
-    # build constraint × slice matrix
-    constraint_gap_cols = [c for c in merged_c.columns if c.endswith("_gap") and not c.startswith("violation_")]
+    constraint_gap_cols = [
+        c for c in merged_c.columns
+        if c.endswith("_gap") and not c.startswith("violation_")
+    ]
     if not constraint_gap_cols:
         st.info("No constraint gap columns found.")
         return
@@ -530,239 +529,56 @@ and how many outliers it contains.
     else:
         st.info("No slice dimensions available for boxplot.")
 
-
-    st.subheader("Slice-level priorities")
+    # ------------------------------------------------------------------ #
+    # SCORES HEATMAP BY DIMENSION (like old cat_dim heatmaps)
+    # ------------------------------------------------------------------ #
+    st.subheader("Scores heatmap by dimension")
     st.markdown(
         """
-**How to read this table**
-
-- `n_cases`: number of cases in the slice.
-- `mean_score`: average WISE score (1 = fully in norm, lower = worse).
-- `shrunk_mean_score`: mean after shrinkage; small slices are pulled towards
-  the global average to reduce noise.
-- `gap`: `global_mean - slice_mean`. Positive gap means the slice is **worse**
-  than the overall average; negative gap means **better**.
-- `PI`: `n_cases × gap`. Higher positive values highlight slices that are
-  both frequent and below the norm and are therefore promising candidates
-  for further investigation.
-        """
-    )
-    st.dataframe(results_state.slice_summary.head(50))
-
-    # --- Bar chart of PI -----------------------------------------------------
-    st.subheader("Top slices by PI")
-    slice_cols = ds.slice_cols
-    if slice_cols and results_state.slice_summary is not None and not results_state.slice_summary.empty:
-        tmp = results_state.slice_summary.copy()
-        tmp["slice_label"] = tmp[slice_cols].astype(str).agg(" | ".join, axis=1)
-        chart_df = tmp.set_index("slice_label")[["PI"]].head(20)
-        st.caption(
-            "Bars to the right (positive PI) indicate slices that are **worse than the norm**. "
-            "Bars to the left (negative PI) perform **better than average**."
-        )
-        st.bar_chart(chart_df)
-    else:
-        st.info("No slice information available for bar chart.")
-
-    # Ensure we always have case_scores available
-    if case_scores is None:
-        case_scores = results_state.case_scores
-
-    # --- Heatmap section -----------------------------------------------------
-    st.subheader("Layer × slice heatmap")
-    st.markdown(
-        """
-Rows are norm layers; columns are slices (combinations of the selected slice
-attributes or a single dimension, depending on the mode).  
-
-Colours show how much the **average violation** in that slice differs from the
-global average for that layer:
-
-- green ≈ lower violation than global (better),
-- red ≈ higher violation than global (worse),
-- values near 0 ≈ similar to global.
-
-Use the controls to decide **which slices** appear in the heatmap:
-either by ranking all slices, or by focusing on a single dimension
-(e.g. vendors) and optionally selecting a subset of categories.
-        """
-    )
-
-    if not slice_cols:
-        st.info("No slice dimensions defined; cannot build heatmap.")
-        return
-
-    # Choose mode: full slice key vs single dimension
-    mode = st.radio(
-        "Heatmap mode",
-        ["All slice dimensions (full key)", "Single dimension"],
-        index=0,
-        horizontal=True,
-    )
-
-    if mode == "All slice dimensions (full key)":
-        key_cols = slice_cols
-        # use the already computed slice summary for ranking
-        ranking_source = results_state.slice_summary
-        # build matrix using full key
-        slice_layer = compute_slice_layer_matrix(
-            df_scores=case_scores,
-            df_log=ds.df,
-            case_id_col=ds.case_id_col,
-            slice_cols=key_cols,
-        )
-    else:
-        # Single dimension mode
-        dim = st.selectbox(
-            "Dimension for heatmap",
-            slice_cols,
-            help="Pick one attribute, e.g. vendor or spend area, to compare its categories.",
-        )
-        key_cols = [dim]
-        # re-aggregate for that single dimension
-        shrink_k = results_state.params.get("shrink_k", 0.0)
-        ranking_source = aggregate_slices(
-            df_scores=case_scores,
-            df_log=ds.df,
-            case_id_col=ds.case_id_col,
-            slice_cols=key_cols,
-            shrink_k=shrink_k,
-        )
-        slice_layer = compute_slice_layer_matrix(
-            df_scores=case_scores,
-            df_log=ds.df,
-            case_id_col=ds.case_id_col,
-            slice_cols=key_cols,
-        )
-
-    if slice_layer.empty or ranking_source is None or ranking_source.empty:
-        st.info("No slice-layer data available for heatmap.")
-        return
-
-    # Reprioritisation controls
-    st.markdown("**Reprioritisation controls**")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        metric = st.selectbox(
-            "Rank slices by",
-            ["PI", "PI_abs", "gap", "gap_abs"],
-            index=0,
-            help=(
-                "`PI`: raw priority index; `PI_abs`: by absolute PI (large positive or negative), "
-                "`gap`: by gap alone; `gap_abs`: by absolute gap."
-            ),
-        )
-    with col2:
-        min_cases = st.number_input(
-            "Min cases per slice",
-            min_value=1,
-            value=50,
-            step=10,
-            help="Ignore tiny slices by requiring at least this many cases per slice.",
-        )
-    with col3:
-        top_n = st.number_input(
-            "Number of slices to consider",
-            min_value=1,
-            value=10,
-            step=1,
-            help="Only consider the top N slices according to the ranking metric above.",
-        )
-
-    ranked = rank_slices(
-        ranking_source,
-        min_cases=min_cases,
-        top_n=top_n,
-        metric=metric,
-    )
-    if ranked.empty:
-        st.info("No slices satisfy the filter; try lowering 'Min cases per slice'.")
-        return
-
-    # Merge ranked slices with slice-layer matrix
-    merged = ranked.merge(slice_layer, on=key_cols, how="left")
-
-    # Build human-readable slice labels
-    merged["slice_label"] = merged[key_cols].astype(str).agg(" | ".join, axis=1)
-
-    # Optional manual selection of slices
-    available_labels = merged["slice_label"].tolist()
-    selected_labels = st.multiselect(
-        "Optional: restrict to specific slices",
-        options=available_labels,
-        default=available_labels,
-        help="Use this if you want to focus on selected vendors/companies/categories "
-             "instead of all top slices.",
-    )
-    if selected_labels:
-        merged = merged[merged["slice_label"].isin(selected_labels)]
-    if merged.empty:
-        st.info("No slices left after manual selection.")
-        return
-
-    # Build matrix: rows = layers, columns = slice_label, values = layer gap
-    layer_gap_cols = [
-        c for c in merged.columns
-        if c.startswith("violation_") and c.endswith("_gap")
-    ]
-    if not layer_gap_cols:
-        st.info("No layer gap columns found in slice-layer matrix.")
-        return
-
-    data = {}
-    for col in layer_gap_cols:
-        layer_id = col.replace("violation_", "").replace("_gap", "")
-        data[layer_id] = merged[col].values
-
-    heatmap_df = pd.DataFrame(data, index=merged["slice_label"]).T  # layers × slices
-
-    fig = px.imshow(
-        heatmap_df,
-        color_continuous_scale="RdYlGn_r",  # green = better (lower gap), red = worse
-        aspect="auto",
-        labels={"color": "gap (violation - global)"},
-    )
-    fig.update_layout(
-        height=400,
-        xaxis_title="Slice",
-        yaxis_title="Layer",
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-    # --- Boxplot section -----------------------------------------------------
-    st.subheader("Boxplot by dimension")
-    st.markdown(
-        """
-Select a dimension to see the **distribution of case scores** per category.
-This is useful to understand how much variation there is inside a category
-and how many outliers it contains.
+Rows = categories of a chosen dimension (e.g. spend areas, vendors).  
+Columns = overall WISE score and layer-specific scores.  
+Colours = average **score** per category (1 = fully in norm, 0 = worst),
+with green = better and red = worse.
         """
     )
 
     if slice_cols:
-        dim_box = st.selectbox(
-            "Dimension for boxplot",
+        dim_scores = st.selectbox(
+            "Dimension for scores heatmap",
             slice_cols,
-            help="For example: spend area, vendor, or company.",
+            help="For example: spend area or vendor.",
         )
-        joined = case_scores.merge(
-            ds.df[[ds.case_id_col, dim_box]].drop_duplicates(),
+
+        joined_scores = case_scores.merge(
+            ds.df[[ds.case_id_col, dim_scores]].drop_duplicates(),
             on=ds.case_id_col,
             how="left",
         )
-        fig_box = px.box(
-            joined,
-            x=dim_box,
-            y="score",
-            points="outliers",
-            color=dim_box,
-        )
-        fig_box.update_layout(
-            xaxis_title=dim_box,
-            yaxis_title="WISE score",
-            showlegend=False,
-        )
-        st.plotly_chart(fig_box, use_container_width=True)
-    else:
-        st.info("No slice dimensions available for boxplot.")
 
+        metrics = ["score"]
+        layer_violation_cols = [
+            col for col in joined_scores.columns if col.startswith("violation_")
+        ]
+        for col in layer_violation_cols:
+            score_col = col.replace("violation_", "score_")
+            joined_scores[score_col] = 1.0 - joined_scores[col]
+            metrics.append(score_col)
+
+        group_s = joined_scores.groupby(dim_scores, dropna=False)
+        score_matrix = group_s[metrics].mean()
+        score_matrix = score_matrix.rename(columns={"score": "mean_score"})
+
+        fig_scores = px.imshow(
+            score_matrix,
+            color_continuous_scale="RdYlGn",  # red = low score, green = high score
+            aspect="auto",
+            labels={"color": "mean score"},
+        )
+        fig_scores.update_layout(
+            height=500,
+            xaxis_title="Scores",
+            yaxis_title=dim_scores,
+        )
+        st.plotly_chart(fig_scores, use_container_width=True)
+    else:
+        st.info("No slice dimensions available for scores heatmap.")

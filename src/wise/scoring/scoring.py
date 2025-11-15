@@ -1,4 +1,5 @@
 from typing import Dict
+
 import pandas as pd
 
 from wise.model import Norm
@@ -16,18 +17,34 @@ def compute_case_scores(
     weights_override: Dict[str, float] | None = None,
 ) -> pd.DataFrame:
     """
-    Compute S^{(v)}(sigma) for each case in the log.
+    Compute WISE scores for each case and record per-layer & per-constraint violations.
 
-    Returns a DataFrame with:
-      - case_id_col
-      - "score"
-      - "violation_<layer_id>" columns (mean violation per layer)
-      - "viol_<constraint_id>" columns (violation per constraint)
+    Returns a DataFrame with columns:
+      - [case_id_col]
+      - "score"                        : overall WISE score in [0, 1]
+      - "violation_<layer_id>"        : mean violation for each layer
+      - "viol_<constraint_id>"        : violation per constraint (0..1)
 
-    weights_override (optional) can be used to pass custom constraint weights
-    (already normalised); if None, view-based weights are computed.
+    Parameters
+    ----------
+    df : DataFrame
+        Event log.
+    norm : Norm
+        Process norm with constraints and views.
+    view_name : str
+        Name of the view to use (e.g. "Finance").
+    case_id_col, activity_col, timestamp_col : str
+        Column names.
+    weights_override : dict, optional
+        Optional dict {constraint_id: weight} (already normalised).
+        If None, weights are computed from the view + norm.
+
+    Notes
+    -----
+    - Violations v_c(sigma) are in [0,1].
+    - Score S^{(v)}(sigma) = 1 - sum_c w_c^{(v)} * v_c(sigma).
     """
-    # determine weights per constraint
+    # Determine weights per constraint
     if weights_override is None:
         weights = compute_view_weights(norm, view_name)
     else:
@@ -36,14 +53,15 @@ def compute_case_scores(
     layer_ids = sorted({c.layer_id for c in norm.constraints})
 
     results = []
+
     for case_id, trace in df.groupby(case_id_col):
         trace = trace.sort_values(timestamp_col)
 
-        # layer accumulators
+        # Per-layer accumulators
         layer_violation_sum: Dict[str, float] = {lid: 0.0 for lid in layer_ids}
         layer_violation_cnt: Dict[str, int] = {lid: 0 for lid in layer_ids}
 
-        # per-constraint violations
+        # Per-constraint violations
         constraint_viol: Dict[str, float] = {}
 
         total_violation_weighted = 0.0
@@ -58,11 +76,10 @@ def compute_case_scores(
             layer_violation_sum[c.layer_id] += v
             layer_violation_cnt[c.layer_id] += 1
 
-            # store per-constraint violation (0..1)
             constraint_viol[f"viol_{c.id}"] = v
 
-        # avg violation per layer (unweighted, for inspection)
-        layer_violation_avg = {}
+        # Average violation per layer (unweighted, for inspection)
+        layer_violation_avg: Dict[str, float] = {}
         for lid in layer_ids:
             n = layer_violation_cnt[lid]
             layer_violation_avg[f"violation_{lid}"] = (
@@ -71,13 +88,12 @@ def compute_case_scores(
 
         score = 1.0 - total_violation_weighted
 
-        results.append(
-            {
-                case_id_col: case_id,
-                "score": score,
-                **layer_violation_avg,
-                **constraint_viol,
-            }
-        )
+        row = {
+            case_id_col: case_id,
+            "score": score,
+        }
+        row.update(layer_violation_avg)
+        row.update(constraint_viol)
+        results.append(row)
 
     return pd.DataFrame(results)

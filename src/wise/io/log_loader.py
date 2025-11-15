@@ -1,6 +1,5 @@
-# wise/io/log_loader.py
-
 from typing import Union
+
 import pandas as pd
 
 
@@ -16,6 +15,22 @@ def load_event_log(
     Ensures:
     - required columns exist
     - timestamp column is converted to datetime
+
+    Parameters
+    ----------
+    path_or_buffer : str | bytes | DataFrame
+        Path to a CSV file or an already loaded DataFrame.
+    case_id_col : str
+        Column name for the case identifier.
+    activity_col : str
+        Column name for the activity label.
+    timestamp_col : str
+        Column name for the event timestamp.
+
+    Returns
+    -------
+    DataFrame
+        Normalised event log.
     """
     if isinstance(path_or_buffer, pd.DataFrame):
         df = path_or_buffer.copy()

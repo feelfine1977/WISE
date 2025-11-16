@@ -1,16 +1,14 @@
-from typing import Dict
+# src/wise/ui/results_page.py
 
+from typing import Dict, List, Optional
+
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
 from wise.scoring.scoring import compute_case_scores
-from wise.scoring.slices import (
-    aggregate_slices,
-    compute_slice_layer_matrix,
-    compute_slice_constraint_matrix,
-    rank_slices,
-)
+from wise.scoring.slices import aggregate_slices
 from wise.norm import compute_view_weights
 from wise.ui import state
 
@@ -18,33 +16,52 @@ from wise.ui import state
 def render_results_page():
     st.header("3. Run WISE and inspect results")
 
-    st.markdown(
-        """
-Use this page to:
-
-1. Choose a **view** (e.g. Finance, Logistics). The view defines how each
-   constraint in the norm is weighted.
-2. Optionally adjust the **layer sliders**:
-   - `1.0` = use the importance from the norm as-is,
-   - `0.0` = ignore this layer,
-   - `> 1.0` = emphasise this layer in the score.
-3. Choose a **shrinkage k**. Higher values pull small slices more strongly
-   towards the global average so rankings are less dominated by tiny, noisy
-   segments.
-4. Press **Compute scores and priorities** to recompute scores and rankings.
-        """
-    )
-
     ds = state.get_dataset_state()
     norm = state.get_norm_state()
 
-    if ds is None:
-        st.warning("Please upload data on the 'Data & Mapping' page first.")
-        return
     if norm is None:
         st.warning("Please load or create a norm on the 'Norm' page first.")
         return
 
+    # --------------------------- Data source ---------------------------
+    st.subheader("Data source")
+
+    use_precomputed = st.checkbox(
+        "Use precomputed scores (Parquet) instead of recomputing from raw log",
+        value=False,
+        help=(
+            "Enable this if you have run precompute_scores.py and created a "
+            "Parquet file with precomputed WISE scores for all views."
+        ),
+    )
+
+    precomputed_df: Optional[pd.DataFrame] = None
+
+    if use_precomputed:
+        pre_file = st.text_input(
+            "Precomputed scores file (Parquet)",
+            "data/BPI_Challenge_2019_precomputed.parquet",
+        )
+        if st.button("Load precomputed"):
+            try:
+                precomputed_df = pd.read_parquet(pre_file)
+                st.session_state["wise_precomputed_scores"] = precomputed_df
+                st.success(f"Loaded precomputed scores from {pre_file}")
+            except Exception as e:
+                st.error(f"Could not load precomputed scores: {e}")
+                return
+        else:
+            precomputed_df = st.session_state.get("wise_precomputed_scores")
+
+        if precomputed_df is None:
+            st.info("Load a precomputed Parquet file, or disable the checkbox to use the raw log.")
+            return
+    else:
+        if ds is None:
+            st.warning("Please upload data on the 'Data & Mapping' page first.")
+            return
+
+    # --------------------------- View & tuning ---------------------------
     view_names = norm.get_view_names()
     if not view_names:
         st.error("Norm contains no views.")
@@ -52,7 +69,6 @@ Use this page to:
 
     view_name = st.selectbox("View", view_names, index=0)
 
-    # --- Layer boosters / toggles -------------------------------------------
     st.subheader("Layer tuning (global what-if)")
     st.caption(
         "Each slider scales the importance of a whole layer within this view. "
@@ -60,6 +76,7 @@ Use this page to:
         "values above `1` make the layer more influential in the score."
     )
 
+    # Discover which layers exist in the norm
     layer_ids = sorted({c.layer_id for c in norm.constraints})
     cols = st.columns(len(layer_ids)) if layer_ids else []
 
@@ -80,7 +97,7 @@ Use this page to:
         layer_factors[lid] = factor
 
     shrink_k = st.slider(
-        "Shrinkage k",
+        "Shrinkage k (Empirical-Bayes for slice-level PI)",
         0.0,
         200.0,
         50.0,
@@ -99,27 +116,30 @@ Use this page to:
             view_name=view_name,
             layer_factors=layer_factors,
             shrink_k=shrink_k,
+            precomputed_df=precomputed_df,
+            use_precomputed=use_precomputed,
         )
     else:
-        results = state.get_results_state()
-        if results is not None:
+        results_state = state.get_results_state()
+        if results_state is not None:
             st.info(
-                f"Showing results for view '{results.view_name}' "
-                f"(k={results.params.get('shrink_k', 0)})."
+                f"Showing previous results for view '{results_state.view_name}' "
+                f"(k={results_state.params.get('shrink_k', 0)})."
             )
-            _show_existing_results(results, ds, norm)
+            _show_existing_results(results_state)
         else:
-            st.info("Press **Compute scores and priorities** to run WISE.")
+            st.info("Press 'Compute scores and priorities' to run WISE.")
 
+
+# ----------------------------------------------------------------------
+# Core scoring + slice aggregation
+# ----------------------------------------------------------------------
 
 def _build_weights_with_layer_factors(
     norm,
     view_name: str,
     layer_factors: Dict[str, float],
 ) -> Dict[str, float]:
-    """
-    Take view-based weights, apply layer-level factors, and renormalise.
-    """
     base = compute_view_weights(norm, view_name)
     scaled: Dict[str, float] = {}
     for c in norm.constraints:
@@ -133,14 +153,30 @@ def _build_weights_with_layer_factors(
     return {cid: w / total for cid, w in scaled.items()}
 
 
-def _run_wise_and_show(ds, norm, view_name: str, layer_factors: Dict[str, float], shrink_k: float):
-    df = ds.df
-
-    weights_override = _build_weights_with_layer_factors(norm, view_name, layer_factors)
-
-    with st.spinner("Computing case-level scores..."):
+def _run_wise_and_show(
+    ds,
+    norm,
+    view_name: str,
+    layer_factors: Dict[str, float],
+    shrink_k: float,
+    precomputed_df: Optional[pd.DataFrame],
+    use_precomputed: bool,
+):
+    # --- Case-level scores (raw or precomputed) ---
+    if use_precomputed and precomputed_df is not None:
+        st.info("Using precomputed scores.")
+        if "view" in precomputed_df.columns:
+            case_scores = precomputed_df[precomputed_df["view"] == view_name].copy()
+        else:
+            case_scores = precomputed_df.copy()
+        # we assume 'score' and 'violation_<layer>' columns were precomputed
+        df_log = None
+    else:
+        st.info("Computing scores from raw log.")
+        df_log = ds.df
+        weights_override = _build_weights_with_layer_factors(norm, view_name, layer_factors)
         case_scores = compute_case_scores(
-            df=df,
+            df=df_log,
             norm=norm,
             view_name=view_name,
             case_id_col=ds.case_id_col,
@@ -149,361 +185,433 @@ def _run_wise_and_show(ds, norm, view_name: str, layer_factors: Dict[str, float]
             weights_override=weights_override,
         )
 
+    if "score" not in case_scores.columns:
+        st.error("Case scores DataFrame has no 'score' column. Please adapt to your schema.")
+        return
+
     st.subheader("Case scores (sample)")
     st.caption(
-        "Each row is a case (e.g., one PO item). "
-        "Scores are in [0, 1]: higher = closer to the norm, lower = more deviating."
+        "Each row is a case. Scores are in [0, 1]: higher = closer to the norm, "
+        "lower = more deviating."
     )
     st.dataframe(case_scores.head(20))
 
-    if not ds.slice_cols:
-        st.info("No slice dimensions defined; only case scores are available.")
-        state.set_results_state(
-            view_name, case_scores, None, params={"shrink_k": shrink_k}
-        )
+    # --- Slice-level aggregation ---
+    st.subheader("Slice-level priorities")
+
+    if df_log is None and not use_precomputed:
+        st.warning("Cannot aggregate slices: no base log available.")
         return
 
-    with st.spinner("Aggregating slices..."):
-        slice_summary = aggregate_slices(
-            df_scores=case_scores,
-            df_log=df,
-            case_id_col=ds.case_id_col,
-            slice_cols=ds.slice_cols,
-            shrink_k=shrink_k,
-        )
+    if use_precomputed and df_log is None:
+        # Heuristic: try to guess slice columns from precomputed file
+        slice_cols = [c for c in case_scores.columns if c.startswith("case ") or c.startswith("case_")]
+        case_id_col = next((c for c in case_scores.columns if "case" in c and "concept:name" in c), None)
+        if case_id_col is None:
+            st.warning("Could not identify case id column in precomputed file.")
+            slice_summary = None
+        else:
+            # we can't call aggregate_slices without df_log; but we can emulate it
+            slice_summary = _aggregate_slices_from_precomputed(
+                case_scores,
+                case_id_col=case_id_col,
+                slice_cols=slice_cols,
+                shrink_k=shrink_k,
+            )
+    else:
+        slice_cols = ds.slice_cols
+        if not slice_cols:
+            st.info("No slice dimensions defined on the Data & Mapping page.")
+            slice_summary = None
+        else:
+            slice_summary = aggregate_slices(
+                df_scores=case_scores,
+                df_log=df_log,
+                case_id_col=ds.case_id_col,
+                slice_cols=slice_cols,
+                shrink_k=shrink_k,
+            )
 
     state.set_results_state(
         view_name=view_name,
         case_scores=case_scores,
         slice_summary=slice_summary,
-        params={"shrink_k": shrink_k},
+        params={"shrink_k": shrink_k, "use_precomputed": use_precomputed},
     )
 
-    _show_existing_results(state.get_results_state(), ds, norm, case_scores=case_scores)
+    _show_existing_results(state.get_results_state())
 
 
-def _show_existing_results(results_state, ds, norm, case_scores=None):
-    st.subheader("Slice-level priorities")
-    st.markdown(
-        """
-**How to read this table**
-
-- `n_cases`: number of cases in the slice.
-- `mean_score`: average WISE score (1 = fully in norm, lower = worse).
-- `shrunk_mean_score`: mean after shrinkage; small slices are pulled towards
-  the global average to reduce noise.
-- `gap`: `global_mean - slice_mean`. Positive gap means the slice is **worse**
-  than the overall average; negative gap means **better**.
-- `PI`: `n_cases × gap`. Higher positive values highlight slices that are
-  both frequent and below the norm and are therefore promising candidates
-  for further investigation.
-        """
-    )
-    st.dataframe(results_state.slice_summary.head(50))
-
-    slice_cols = ds.slice_cols
-
-    # Bar chart of PI
-    st.subheader("Top slices by PI")
-    if slice_cols and results_state.slice_summary is not None and not results_state.slice_summary.empty:
-        tmp = results_state.slice_summary.copy()
-        tmp["slice_label"] = tmp[slice_cols].astype(str).agg(" | ".join, axis=1)
-        chart_df = tmp.set_index("slice_label")[["PI"]].head(20)
-        st.caption(
-            "Bars to the right (positive PI) indicate slices that are **worse than the norm**. "
-            "Bars to the left (negative PI) perform **better than average**."
-        )
-        st.bar_chart(chart_df)
-    else:
-        st.info("No slice information available for bar chart.")
-
-    # Ensure we have case_scores
-    if case_scores is None:
-        case_scores = results_state.case_scores
-
-    # ------------------------------------------------------------------ #
-    # LAYER-LEVEL HEATMAP
-    # ------------------------------------------------------------------ #
-    st.subheader("Layer × slice heatmap")
-    st.markdown(
-        """
-Rows are norm layers; columns are slices (combinations of the selected slice
-attributes or a single dimension, depending on the mode).  
-
-Colours show how much the **average violation** in that slice differs from the
-global average for that layer:
-
-- green ≈ lower violation than global (better),
-- red ≈ higher violation than global (worse),
-- values near 0 ≈ similar to global.
-        """
-    )
-
+def _aggregate_slices_from_precomputed(
+    case_scores: pd.DataFrame,
+    case_id_col: str,
+    slice_cols: List[str],
+    shrink_k: float,
+) -> Optional[pd.DataFrame]:
+    """Fallback aggregation when only precomputed scores are available."""
     if not slice_cols:
-        st.info("No slice dimensions defined; cannot build heatmap.")
+        return None
+
+    df = case_scores[[case_id_col, "score"] + slice_cols].drop_duplicates()
+    grouped = df.groupby(slice_cols, dropna=False)
+    agg = grouped["score"].agg(["mean", "count"]).reset_index()
+    agg = agg.rename(columns={"mean": "mean_score", "count": "n_cases"})
+
+    global_mean = float(df["score"].mean())
+    agg["global_mean"] = global_mean
+    agg["gap"] = global_mean - agg["mean_score"]
+
+    if shrink_k > 0:
+        agg["shrunk_mean_score"] = (
+            (agg["n_cases"] * agg["mean_score"] + shrink_k * global_mean)
+            / (agg["n_cases"] + shrink_k)
+        )
+    else:
+        agg["shrunk_mean_score"] = agg["mean_score"]
+
+    agg["PI"] = agg["n_cases"] * agg["gap"]
+    return agg
+
+
+# ----------------------------------------------------------------------
+# Visualisation of existing results (case + slices + layer anomalies)
+# ----------------------------------------------------------------------
+
+def _show_existing_results(results_state):
+    if results_state is None:
+        st.info("No previous results available.")
+        return
+
+    ds = state.get_dataset_state()
+    norm = state.get_norm_state()
+
+    case_scores = results_state.case_scores
+    slice_summary = results_state.slice_summary
+    params = results_state.params or {}
+    view_name = results_state.view_name
+
+    st.subheader(f"Slice-level priorities for view '{view_name}'")
+    if slice_summary is None or slice_summary.empty:
+        st.info("No slice-level summary available.")
+    else:
+        st.dataframe(slice_summary.head(50))
+
+        # Top slices by PI
+        st.subheader("Top slices by Priority Index (PI)")
+        slice_cols = [
+            c for c in slice_summary.columns
+            if c not in {"n_cases", "mean_score", "shrunk_mean_score", "gap", "PI", "global_mean"}
+        ]
+        if slice_cols:
+            tmp = slice_summary.copy()
+            tmp["slice_label"] = tmp[slice_cols].astype(str).agg(" | ".join, axis=1)
+            chart_df = tmp.set_index("slice_label")[["PI"]].head(20)
+            st.bar_chart(chart_df)
+        else:
+            st.info("No slice dimensions found in summary; skipping PI bar chart.")
+
+    # ------------------------------------------------------------------ #
+    # NEW: Layer × slice anomaly ranking & heatmap
+    # ------------------------------------------------------------------ #
+    st.subheader("Layer × slice anomaly ranking")
+
+    if "score" not in case_scores.columns:
+        st.info("Case scores missing; cannot compute layer anomalies.")
+        return
+
+    # Determine slice dimensions
+    if slice_summary is not None and not slice_summary.empty:
+        slice_cols_all = [
+            c for c in slice_summary.columns
+            if c not in {"n_cases", "mean_score", "shrunk_mean_score", "gap", "PI", "global_mean"}
+        ]
+    elif ds is not None:
+        slice_cols_all = ds.slice_cols
+    else:
+        slice_cols_all = [c for c in case_scores.columns if c.startswith("case ") or c.startswith("case_")]
+
+    if not slice_cols_all:
+        st.info("No slice dimensions available; cannot compute layer anomalies.")
         return
 
     mode = st.radio(
-        "Heatmap mode",
-        ["All slice dimensions (full key)", "Single dimension"],
-        index=0,
-        horizontal=True,
+        "Slice key mode",
+        ["All slice dimensions (full key)", "Single dimension", "Custom combination (select 1–N dimensions)"],
+        index=2,
+        help=(
+            "Full key: every combination of all slice dimensions.\n"
+            "Single: one dimension at a time (e.g. spend area only).\n"
+            "Custom: choose 1–N dimensions to build the slice key."
+        ),
     )
 
     if mode == "All slice dimensions (full key)":
-        key_cols = slice_cols
-        ranking_source = results_state.slice_summary
-        slice_layer = compute_slice_layer_matrix(
-            df_scores=case_scores,
-            df_log=ds.df,
-            case_id_col=ds.case_id_col,
-            slice_cols=key_cols,
-        )
-    else:
-        dim = st.selectbox(
+        key_cols = slice_cols_all
+    elif mode == "Single dimension":
+        dim_single = st.selectbox(
             "Dimension for heatmap",
-            slice_cols,
-            help="Pick one attribute, e.g. vendor or spend area, to compare its categories.",
+            slice_cols_all,
+            help="The slice key will be this dimension only.",
         )
-        key_cols = [dim]
-        shrink_k_dim = results_state.params.get("shrink_k", 0.0)
-        ranking_source = aggregate_slices(
-            df_scores=case_scores,
-            df_log=ds.df,
-            case_id_col=ds.case_id_col,
-            slice_cols=key_cols,
-            shrink_k=shrink_k_dim,
+        key_cols = [dim_single]
+    else:  # custom combination
+        key_cols = st.multiselect(
+            "Dimensions for custom slice key",
+            slice_cols_all,
+            default=slice_cols_all[:2],
+            help="Select 1–N dimensions to build the slice key.",
         )
-        slice_layer = compute_slice_layer_matrix(
-            df_scores=case_scores,
-            df_log=ds.df,
-            case_id_col=ds.case_id_col,
-            slice_cols=key_cols,
-        )
+        if not key_cols:
+            st.info("Select at least one dimension for the custom slice key.")
+            return
 
-    if slice_layer.empty or ranking_source is None or ranking_source.empty:
-        st.info("No slice-layer data available for heatmap.")
+    # Layers to include
+    layer_cols_map = {
+        col[len("violation_") :]: col
+        for col in case_scores.columns
+        if col.startswith("violation_")
+    }
+    if not layer_cols_map:
+        st.info("No layer violation columns (violation_*) found in case scores.")
         return
 
-    st.markdown("**Reprioritisation controls**")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        metric = st.selectbox(
-            "Rank slices by",
-            ["PI", "PI_abs", "gap", "gap_abs"],
-            index=0,
-            help=(
-                "`PI`: raw priority index; `PI_abs`: by absolute PI (large positive or negative), "
-                "`gap`: by gap alone; `gap_abs`: by absolute gap."
-            ),
-        )
-    with col2:
-        min_cases = st.number_input(
-            "Min cases per slice",
-            min_value=1,
-            value=50,
-            step=10,
-            help="Ignore tiny slices by requiring at least this many cases per slice.",
-        )
-    with col3:
-        top_n = st.number_input(
-            "Number of slices to consider",
-            min_value=1,
-            value=10,
-            step=1,
-            help="Only consider the top N slices according to the ranking metric above.",
-        )
-
-    ranked = rank_slices(
-        ranking_source,
-        min_cases=min_cases,
-        top_n=top_n,
-        metric=metric,
+    layer_choices = sorted(layer_cols_map.keys())
+    selected_layers = st.multiselect(
+        "Layers to include",
+        layer_choices,
+        default=layer_choices,
+        help="Only these layers will be considered in the anomaly ranking.",
     )
-    if ranked.empty:
-        st.info("No slices satisfy the filter; try lowering 'Min cases per slice'.")
+    if not selected_layers:
+        st.info("Select at least one layer.")
         return
 
-    merged = ranked.merge(slice_layer, on=key_cols, how="left")
-    merged["slice_label"] = merged[key_cols].astype(str).agg(" | ".join, axis=1)
+    # Volume shrinkage for layer priorities
+    k_layer = st.number_input(
+        "Volume shrinkage k for layer priorities",
+        min_value=0.0,
+        value=50.0,
+        step=10.0,
+        help=(
+            "Controls how strongly small slices are down-weighted when ranking "
+            "layer × slice anomalies. Set to 0 to ignore volume."
+        ),
+    )
 
-    available_labels = merged["slice_label"].tolist()
+    # Minimum cases per slice
+    min_cases = st.number_input(
+        "Min cases per slice",
+        min_value=1,
+        value=20,
+        step=5,
+    )
+
+    # Number of cells (layer × slice) to consider
+    top_n_cells = st.number_input(
+        "Number of layer × slice cells to consider",
+        min_value=1,
+        value=12,
+        step=1,
+    )
+
+    # Build merged data with slice attributes
+    if ds is not None:
+        df_log = ds.df
+        key_df = df_log[[ds.case_id_col] + key_cols].drop_duplicates()
+        merged = case_scores.merge(key_df, on=ds.case_id_col, how="left")
+        case_id_col = ds.case_id_col
+    else:
+        # precomputed-only scenario: assume slice columns are already in case_scores
+        merged = case_scores.copy()
+        case_id_col = next((c for c in merged.columns if "case" in c and "concept:name" in c), None)
+        if case_id_col is None:
+            st.error("Could not determine case identifier column for anomaly computation.")
+            return
+
+    # Global stats per selected layer
+    global_means: Dict[str, float] = {}
+    global_stds: Dict[str, float] = {}
+    for lid in selected_layers:
+        col = layer_cols_map[lid]
+        vals = merged[col].to_numpy()
+        global_means[lid] = float(np.nanmean(vals))
+        std = float(np.nanstd(vals))
+        if not np.isfinite(std) or std <= 0:
+            std = 0.0
+        global_stds[lid] = std
+
+    # Group by slice key and compute mean violations per layer + counts
+    grouped = merged.groupby(key_cols, dropna=False)
+    means = grouped[[layer_cols_map[lid] for lid in selected_layers]].mean()
+    counts = grouped[case_id_col].size()
+
+    if means.empty:
+        st.info("No data for layer anomalies with the chosen key.")
+        return
+
+    # Build long-form table of layer × slice scores
+    records = []
+    for idx, idx_label in enumerate(means.index):
+        # idx_label is scalar or tuple depending on number of key_cols
+        if isinstance(idx_label, tuple):
+            slice_values = list(idx_label)
+        else:
+            slice_values = [idx_label]
+        slice_dict = {col_name: val for col_name, val in zip(key_cols, slice_values)}
+        n_cases = int(counts.to_numpy()[idx])
+
+        if n_cases < min_cases:
+            continue
+
+        for lid in selected_layers:
+            col = layer_cols_map[lid]
+            mean_v = float(means[col].to_numpy()[idx])
+            global_mean = global_means[lid]
+            std = global_stds[lid]
+            gap = mean_v - global_mean
+            if std > 0:
+                z = gap / std
+            else:
+                z = 0.0
+            z_plus = max(z, 0.0)
+            if k_layer > 0:
+                vol_weight = n_cases / (n_cases + k_layer)
+            else:
+                vol_weight = 1.0
+            priority = z_plus * vol_weight
+            pi = max(gap, 0.0) * n_cases
+
+            rec = dict(slice_dict)
+            rec.update(
+                {
+                    "slice_label": " | ".join(str(v) for v in slice_values),
+                    "layer_id": lid,
+                    "n_cases": n_cases,
+                    "mean_violation": mean_v,
+                    "global_mean": global_mean,
+                    "gap": gap,
+                    "z": z,
+                    "z_plus": z_plus,
+                    "vol_weight": vol_weight,
+                    "priority": priority,
+                    "PI": pi,
+                }
+            )
+            records.append(rec)
+
+    matrix = pd.DataFrame.from_records(records)
+    if matrix.empty:
+        st.info("No layer × slice cells passed the min-cases filter.")
+        return
+
+    matrix["PI_abs"] = matrix["PI"].abs()
+
+    # Ranking metric
+    rank_metric = st.selectbox(
+        "Rank cells by",
+        ["priority", "z_plus", "PI_abs", "gap", "PI"],
+        index=0,
+        help=(
+            "priority = z_plus × volume weight (recommended)\n"
+            "z_plus = severity (standardised gap, positive part)\n"
+            "PI_abs = |n × gap|, classic priority index style\n"
+            "gap = mean_violation - global_mean\n"
+            "PI = n × gap"
+        ),
+    )
+    ascending = False  # higher = worse for all these metrics
+
+    ranked = matrix.sort_values(rank_metric, ascending=ascending)
+
+    # Optional restriction to specific slices (by label)
+    all_labels = ranked["slice_label"].unique().tolist()
+    default_labels = ranked["slice_label"].head(top_n_cells).tolist()
     selected_labels = st.multiselect(
         "Optional: restrict to specific slices",
-        options=available_labels,
-        default=available_labels,
-        help="Use this if you want to focus on selected vendors/companies/categories "
-             "instead of all top slices.",
+        options=all_labels,
+        default=default_labels,
+        help="Use this to focus on a subset of slices (e.g. specific spend areas or vendors).",
     )
     if selected_labels:
-        merged = merged[merged["slice_label"].isin(selected_labels)]
-    if merged.empty:
-        st.info("No slices left after manual selection.")
-        return
+        ranked = ranked[ranked["slice_label"].isin(selected_labels)]
 
-    layer_gap_cols = [
-        c for c in merged.columns
-        if c.startswith("violation_") and c.endswith("_gap")
+    top_df = ranked.head(top_n_cells).copy()
+
+    st.subheader("Layer × slice priority table")
+    display_cols = [
+        "layer_id",
+        "slice_label",
+        "n_cases",
+        "z_plus",
+        "priority",
+        "gap",
+        "PI",
     ]
-    if not layer_gap_cols:
-        st.info("No layer gap columns found in slice-layer matrix.")
-        return
+    st.dataframe(top_df[display_cols])
 
-    data = {}
-    for col in layer_gap_cols:
-        layer_id = col.replace("violation_", "").replace("_gap", "")
-        data[layer_id] = merged[col].values
+    # Heatmap metric
+    heat_metric = st.selectbox(
+        "Heatmap colour metric",
+        ["gap", "z_plus", "priority"],
+        index=0,
+        help=(
+            "gap = mean violation difference vs global.\n"
+            "z_plus = standardised gap (positive part).\n"
+            "priority = z_plus × volume weight."
+        ),
+    )
 
-    heatmap_df = pd.DataFrame(data, index=merged["slice_label"]).T  # layers × slices
-
+    heat_df = top_df.pivot(index="layer_id", columns="slice_label", values=heat_metric)
     fig = px.imshow(
-        heatmap_df,
-        color_continuous_scale="RdYlGn_r",  # green = better, red = worse
-        aspect="auto",
-        labels={"color": "gap (violation - global)"},
-    )
-    fig.update_layout(height=400, xaxis_title="Slice", yaxis_title="Layer")
-    st.plotly_chart(fig, width="stretch")
-
-    # ------------------------------------------------------------------ #
-    # CONSTRAINT-LEVEL HEATMAP (within a layer)
-    # ------------------------------------------------------------------ #
-    st.subheader("Constraint × slice heatmap (within a layer)")
-    st.markdown(
-        """
-Use this view to drill down inside a specific layer.  
-For example: select `presence` to see each presence constraint (GR, INV, CLEAR, …)
-for the same slices, or select `exclusion` or `order_lag` to see which concrete
-rules are most problematic.
-        """
-    )
-
-    dim_c = st.selectbox(
-        "Dimension for constraint heatmap",
-        slice_cols,
-        help="For example: vendor or spend area.",
-    )
-
-    layer_ids_all = sorted({c.layer_id for c in norm.constraints})
-    layer_for_constraints = st.selectbox(
-        "Layer",
-        layer_ids_all,
-        help="Only constraints from this layer will appear as rows in the heatmap.",
-    )
-
-    shrink_k_c = results_state.params.get("shrink_k", 0.0)
-    ranking_source_c = aggregate_slices(
-        df_scores=case_scores,
-        df_log=ds.df,
-        case_id_col=ds.case_id_col,
-        slice_cols=[dim_c],
-        shrink_k=shrink_k_c,
-    )
-    matrix_c = compute_slice_constraint_matrix(
-        df_scores=case_scores,
-        df_log=ds.df,
-        case_id_col=ds.case_id_col,
-        slice_cols=[dim_c],
-        norm=norm,
-        layer_id=layer_for_constraints,
-    )
-
-    if matrix_c.empty or ranking_source_c.empty:
-        st.info("No constraint-level data available for this layer/dimension.")
-        return
-
-    st.markdown("**Reprioritisation controls for constraint view**")
-    col1c, col2c, col3c = st.columns(3)
-    with col1c:
-        metric_c = st.selectbox(
-            "Rank slices by (constraint view)",
-            ["PI", "PI_abs", "gap", "gap_abs"],
-            index=0,
-        )
-    with col2c:
-        min_cases_c = st.number_input(
-            "Min cases per slice (constraint view)",
-            min_value=1,
-            value=50,
-            step=10,
-        )
-    with col3c:
-        top_n_c = st.number_input(
-            "Number of slices to consider (constraint view)",
-            min_value=1,
-            value=10,
-            step=1,
-        )
-
-    ranked_c = rank_slices(
-        ranking_source_c,
-        min_cases=min_cases_c,
-        top_n=top_n_c,
-        metric=metric_c,
-    )
-    if ranked_c.empty:
-        st.info("No slices satisfy the filter in constraint view.")
-        return
-
-    merged_c = ranked_c.merge(matrix_c, on=[dim_c], how="left")
-    merged_c["slice_label"] = merged_c[dim_c].astype(str)
-
-    labels_c = merged_c["slice_label"].tolist()
-    selected_labels_c = st.multiselect(
-        "Optional: restrict to specific slices (constraint view)",
-        options=labels_c,
-        default=labels_c,
-    )
-    if selected_labels_c:
-        merged_c = merged_c[merged_c["slice_label"].isin(selected_labels_c)]
-    if merged_c.empty:
-        st.info("No slices left after selection in constraint view.")
-        return
-
-    constraint_gap_cols = [
-        c for c in merged_c.columns
-        if c.endswith("_gap") and not c.startswith("violation_")
-    ]
-    if not constraint_gap_cols:
-        st.info("No constraint gap columns found.")
-        return
-
-    data_c = {}
-    for col in constraint_gap_cols:
-        cid = col.replace("_gap", "")
-        data_c[cid] = merged_c[col].values
-
-    heatmap_df_c = pd.DataFrame(data_c, index=merged_c["slice_label"]).T  # constraints × slices
-
-    fig_c = px.imshow(
-        heatmap_df_c,
+        heat_df,
         color_continuous_scale="RdYlGn_r",
         aspect="auto",
-        labels={"color": "gap (violation - global)"},
+        labels={"color": f"{heat_metric} (layer deviation)"},
     )
-    fig_c.update_layout(
+    fig.update_layout(
+        xaxis_title="Slice",
+        yaxis_title="Layer",
         height=400,
-        xaxis_title=f"Slice ({dim_c})",
-        yaxis_title=f"Constraints in layer '{layer_for_constraints}'",
     )
-    st.plotly_chart(fig_c, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown(
+        """
+Cells show the average **deviation from global** for each (layer, slice)
+combination, as measured by the chosen metric. Green ≈ better than global;
+red ≈ worse than global. Use the priority table above to decide which
+combinations deserve further attention given their severity and volume.
+        """
+    )
 
     # ------------------------------------------------------------------ #
-    # BOX PLOT BY DIMENSION
+    # BOX PLOT & SCORES HEATMAP
     # ------------------------------------------------------------------ #
     st.subheader("Boxplot by dimension")
     st.markdown(
         """
-Select a dimension to see the **distribution of case scores** per category.
+Select a dimension to see the distribution of case scores per category.
 This is useful to understand how much variation there is inside a category
 and how many outliers it contains.
         """
     )
 
-    if slice_cols:
+    # reuse slice_cols_all from above if available, otherwise recompute
+    if slice_summary is not None and not slice_summary.empty:
+        slice_cols_all = [
+            c for c in slice_summary.columns
+            if c not in {"n_cases", "mean_score", "shrunk_mean_score", "gap", "PI", "global_mean"}
+        ]
+    elif ds is not None:
+        slice_cols_all = ds.slice_cols
+    else:
+        slice_cols_all = [c for c in case_scores.columns if c.startswith("case ") or c.startswith("case_")]
+
+    if slice_cols_all and ds is not None:
         dim_box = st.selectbox(
             "Dimension for boxplot",
-            slice_cols,
+            slice_cols_all,
+            key="box_dim",
             help="For example: spend area, vendor, or company.",
         )
         joined = case_scores.merge(
@@ -523,27 +631,25 @@ and how many outliers it contains.
             yaxis_title="WISE score",
             showlegend=False,
         )
-        st.plotly_chart(fig_box, width="stretch")
+        st.plotly_chart(fig_box, use_container_width=True)
     else:
-        st.info("No slice dimensions available for boxplot.")
+        st.info("No slice dimensions available for boxplot (or dataset not present).")
 
-    # ------------------------------------------------------------------ #
-    # SCORES HEATMAP BY DIMENSION (like old cat_dim heatmaps)
-    # ------------------------------------------------------------------ #
     st.subheader("Scores heatmap by dimension")
     st.markdown(
         """
-Rows = categories of a chosen dimension (e.g. spend areas, vendors).  
-Columns = overall WISE score and layer-specific scores.  
-Colours = average **score** per category (1 = fully in norm, 0 = worst),
-with green = better and red = worse.
+Rows = categories of a chosen dimension (e.g. spend areas, vendors).
+Columns = overall WISE score and layer-specific scores converted to a
+score-like scale (1 = fully in norm, 0 = worst).
+Colours = average **score** per category with green = better and red = worse.
         """
     )
 
-    if slice_cols:
+    if slice_cols_all and ds is not None:
         dim_scores = st.selectbox(
             "Dimension for scores heatmap",
-            slice_cols,
+            slice_cols_all,
+            key="scores_dim",
             help="For example: spend area or vendor.",
         )
 
@@ -563,12 +669,11 @@ with green = better and red = worse.
             metrics.append(score_col)
 
         group_s = joined_scores.groupby(dim_scores, dropna=False)
-        score_matrix = group_s[metrics].mean()
-        score_matrix = score_matrix.rename(columns={"score": "mean_score"})
+        score_matrix = group_s[metrics].mean().rename(columns={"score": "mean_score"})
 
         fig_scores = px.imshow(
             score_matrix,
-            color_continuous_scale="RdYlGn",  # red = low score, green = high score
+            color_continuous_scale="RdYlGn",
             aspect="auto",
             labels={"color": "mean score"},
         )
@@ -577,6 +682,6 @@ with green = better and red = worse.
             xaxis_title="Scores",
             yaxis_title=dim_scores,
         )
-        st.plotly_chart(fig_scores, width="stretch")
+        st.plotly_chart(fig_scores, use_container_width=True)
     else:
-        st.info("No slice dimensions available for scores heatmap.")
+        st.info("No slice dimensions available for scores heatmap (or dataset not present).")

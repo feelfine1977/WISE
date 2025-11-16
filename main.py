@@ -10,23 +10,23 @@ from wise.scoring.slices import aggregate_slices
 # Configuration – adjust here for other logs
 # --------------------------------------------------------------------
 
-LOG_PATH = "data/BPIC_2019.csv"
-NORM_PATH = "data/WISE_norm.json"
+# Read all from settings.json if needed
+settings_path = "settings.json"
+settings = pd.read_json(settings_path, typ="series")
+# Paths
+LOG_PATH = settings["log_path"]  # e.g. "data/BPI_2019.csv"
+NORM_PATH = settings["norm_path"]  # e.g. "data/WISE_BPIC_Norm.json"
 
 # Raw column names in BPIC_2019.csv
-CASE_ID_COL = "case:concept:name"
-ACTIVITY_COL = "concept:name"
-TIMESTAMP_COL = "time:timestamp"
+CASE_ID_COL = settings["case_id_col"]  # e.g. "case:concept:name"
+ACTIVITY_COL = settings["activity_col"]  # e.g. "event:concept:name"
+TIMESTAMP_COL = settings["timestamp_col"]  # e.g. "time:timestamp"
 
 # Slice attributes for BPIC_2019 – change as needed
-SLICE_COLS = [
-    "case_Company",
-    "case_Spend_area_text",
-    "case_Purch._Doc._Category_name",
-]
+SLICE_COLS = settings["SLICE_COLS"]  # e.g. ["case:Company", "case:Document Type"]
 
 # View name to use from the norm (e.g. "Finance" or "Logistics")
-DEFAULT_VIEW = "Finance"
+DEFAULT_VIEW = settings["default_view"]  # e.g. "Finance"
 
 # Empirical-Bayes shrinkage parameter; set to 0 to disable
 SHRINK_K = 50.0

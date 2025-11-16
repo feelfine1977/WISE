@@ -1,6 +1,16 @@
 {
-    "data_path": "path/to/your/data",
+    "data_path": "data/BPIC_2019.csv",
+    "norm_path": "data/WISE_norm.json",
     "reports_path": "path/to/your/reports",
-    "log_path": "path/to/your/logs"
-
+    "log_path": "data/BPIC_2019.csv",
+    "output_path": "data/BPI_Challenge_2019_precomputed.parquet",
+    "case_id_col": "case:concept:name",
+    "activity_col": "concept:name",
+    "timestamp_col": "time:timestamp",
+    "default_view": "Finance",
+    "SLICE_COLS": [
+        "case_Company",
+        "case_Spend_area_text",
+        "case_Purch._Doc._Category_name"
+    ]
 }

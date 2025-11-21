@@ -1,9 +1,8 @@
 {
-    "data_path": "data/BPIC_2019.csv",
-    "norm_path": "data/WISE_norm.json",
+    "data_path": "data/BPI_Challenge_2019.csv",
+    "norm_path": "data/WISE_BPIC_2019_norm.json",
     "reports_path": "path/to/your/reports",
-    "log_path": "data/BPIC_2019.csv",
-    "output_path": "data/BPI_Challenge_2019_precomputed.parquet",
+    "output_path": "data/results_BPIC_2019",
     "case_id_col": "case:concept:name",
     "activity_col": "concept:name",
     "timestamp_col": "time:timestamp",
@@ -12,5 +11,10 @@
         "case_Company",
         "case_Spend_area_text",
         "case_Purch._Doc._Category_name"
-    ]
+    ],
+    "CASE_COLS": {
+        "CASE_ID_COL": "case concept:name",
+        "ACTIVITY_COL": "event concept:name",
+        "TIMESTAMP_COL": "event time:timestamp"
+    }
 }

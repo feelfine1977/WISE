@@ -82,31 +82,30 @@ Each constraint `c ∈ C` has:
 Examples:
 
 - Presence:  
-  `v_c(σ) = 0` if activity `a` occurs at least once in `σ`, 1 otherwise.
+  $v_c(σ) = 0$ if activity $a$ occurs at least once in $σ$, 1 otherwise.
 - Order/Lag:  
-  `v_c(σ) = 0` if `a1` occurs before `a2` and the lag is below a threshold;  
-  gradually increasing towards 1 if `a2` is very late or missing.
+  $v_c(σ) = 0$ if $a_1$ occurs before $a_2$ and the lag is below a threshold;  
+  gradually increasing towards 1 if $a_2$ is very late or missing.
 - Balance:  
-  `v_c(σ)` proportional to the relative difference between quantities at two activities, capped at 1.
+  $v_c(σ)$ proportional to the relative difference between quantities at two activities, capped at 1.
 - Singularity:  
-  `v_c(σ) = 0` if an activity occurs at most once; higher values if it repeats.
+  $v_c(σ) = 0$ if an activity occurs at most once; higher values if it repeats.
 - Exclusion:  
-  `v_c(σ) = 1` if a forbidden activity occurs, 0 otherwise.
-
+  $v_c(σ) = 1$ if a forbidden activity occurs, 0 otherwise.
 ### 2.2 Views and case scores
 
 For each **view** `v` (Finance, Logistics, …) we assign non-negative weights
-`w_c^{(v)}` to each constraint `c`, typically normalised so that
+$w_c^{(v)}$ to each constraint $c$, typically normalised so that
 
-\[\sum_{c \in C} w_c^{(v)} = 1.\]
+$\sum_{c \in C} w_c^{(v)} = 1.$
 
-The **case-level violation** in view `v` is:
+The **case-level violation** in view $v$ is:
 
-\[\mathrm{Viol}^{(v)}(\sigma) = \sum_{c \in C} w_c^{(v)} \, v_c(\sigma).\]
+$\mathrm{Viol}^{(v)}(\sigma) = \sum_{c \in C} w_c^{(v)} \, v_c(\sigma).$
 
 The **WISE case score** is then
 
-\[\boxed{S^{(v)}(\sigma) = 1 - \mathrm{Viol}^{(v)}(\sigma) \in [0, 1]}\]
+$\boxed{S^{(v)}(\sigma) = 1 - \mathrm{Viol}^{(v)}(\sigma) \in [0, 1]}$
 
 where 1 means fully in norm and 0 is maximally off-norm for the chosen
 constraint set and weights.
@@ -125,32 +124,31 @@ For view `v`, define:
 
 - Slice mean score:
 
-  \[\mu_s^{(v)} = \frac{1}{|s|} \sum_{\sigma \in s} S^{(v)}(\sigma).\]
+  $\mu_s^{(v)} = \frac{1}{|s|} \sum_{\sigma \in s} S^{(v)}(\sigma).$
 
 - Global mean score:
 
-  \[\bar{\mu}^{(v)} = \frac{1}{|L|} \sum_{\sigma \in L} S^{(v)}(\sigma).\]
-
+  $\bar{\mu}^{(v)} = \frac{1}{|L|} \sum_{\sigma \in L} S^{(v)}(\sigma).$
 - Gap between slice and global mean:
 
-  \[\mathrm{gap}_s^{(v)} = \bar{\mu}^{(v)} - \mu_s^{(v)}.\]
+  $\mathrm{gap}_s^{(v)} = \bar{\mu}^{(v)} - \mu_s^{(v)}.$
 
   Positive gap means slice `s` is **worse** than average (lower scores).
 
 - **Priority Index (PI)**:
 
-  \[\boxed{\mathrm{PI}_s^{(v)} = |s| \cdot \mathrm{gap}_s^{(v)}}\]
+  $\boxed{\mathrm{PI}_s^{(v)} = |s| \cdot \mathrm{gap}_s^{(v)}}$
 
-Slices with high positive `PI_s^{(v)}` aggregate large numbers of cases and large deviations, and are
+Slices with high positive $\mathrm{PI}_s^{(v)}$ aggregate large numbers of cases and large deviations, and are
 therefore promising candidates for investigation.
 
 ### 2.4 Refinement targets
 
 In the refinement step we use WISE outputs as **targets**:
 
-- Overall score `S^{(v)}(σ)` or its “badness” complement `1 - S^{(v)}(σ)`.
-- Layer-level violations `violation_layer` (e.g. `violation_presence`).
-- Constraint-level violations `viol_constraint_id` (e.g. `viol_c001`).
+- Overall score $S^{(v)}(\sigma)$ or its “badness” complement $1 - S^{(v)}(\sigma)$.
+- Layer-level violations $violation\_layer$ (e.g. $violation\_presence$).
+- Constraint-level violations $viol\_constraint\_id$ (e.g. $viol\_c001$).
 
 These are used to:
 

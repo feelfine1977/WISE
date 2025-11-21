@@ -1,0 +1,225 @@
+{
+    "views": [
+        "Finance",
+        "Logistics",
+        "Automation"
+    ],
+    "constraints": [
+        {
+            "id": "c_l1_create_po",
+            "layer_id": "presence",
+            "description": "Each PO item should have a creation event",
+            "params": {
+                "activity": "Create Purchase Order Item"
+            },
+            "base_weight": 1.0,
+            "view_weights": {
+                "Finance": 0.2,
+                "Logistics": 0.2,
+                "Automation": 0.2
+            }
+        },
+        {
+            "id": "c_l1_gr",
+            "layer_id": "presence",
+            "description": "Each PO item should have at least one goods receipt",
+            "params": {
+                "activity": "Record Goods Receipt"
+            },
+            "base_weight": 1.0,
+            "view_weights": {
+                "Finance": 0.2,
+                "Logistics": 0.3,
+                "Automation": 0.2
+            }
+        },
+        {
+            "id": "c_l1_inv",
+            "layer_id": "presence",
+            "description": "Each PO item should have at least one invoice receipt",
+            "params": {
+                "activity": "Record Invoice Receipt"
+            },
+            "base_weight": 1.0,
+            "view_weights": {
+                "Finance": 0.3,
+                "Logistics": 0.2,
+                "Automation": 0.2
+            }
+        },
+        {
+            "id": "c_l1_clear",
+            "layer_id": "presence",
+            "description": "Completed items should be cleared/paid",
+            "params": {
+                "activity": "Clear Invoice"
+            },
+            "base_weight": 1.0,
+            "view_weights": {
+                "Finance": 0.3,
+                "Logistics": 0.3,
+                "Automation": 0.2
+            }
+        },
+        {
+            "id": "c_l2_create_to_gr",
+            "layer_id": "order_lag",
+            "description": "Goods receipt should follow PO creation within 60 days",
+            "params": {
+                "activity_from": "Create Purchase Order Item",
+                "activity_to": "Record Goods Receipt",
+                "max_days": 60
+            },
+            "base_weight": 1.0,
+            "view_weights": {
+                "Finance": 0.1,
+                "Logistics": 0.4,
+                "Automation": 0.1
+            }
+        },
+        {
+            "id": "c_l2_gr_to_inv",
+            "layer_id": "order_lag",
+            "description": "Invoice receipt should follow GR within 10 days",
+            "params": {
+                "activity_from": "Record Goods Receipt",
+                "activity_to": "Record Invoice Receipt",
+                "max_days": 10
+            },
+            "base_weight": 1.0,
+            "view_weights": {
+                "Finance": 0.3,
+                "Logistics": 0.4,
+                "Automation": 0.2
+            }
+        },
+        {
+            "id": "c_l2_inv_to_clear",
+            "layer_id": "order_lag",
+            "description": "Invoice should be cleared within 30 days after invoice receipt",
+            "params": {
+                "activity_from": "Record Invoice Receipt",
+                "activity_to": "Clear Invoice",
+                "max_days": 30
+            },
+            "base_weight": 1.0,
+            "view_weights": {
+                "Finance": 0.5,
+                "Logistics": 0.2,
+                "Automation": 0.2
+            }
+        },
+        {
+            "id": "c_l4_change_price_once",
+            "layer_id": "singularity",
+            "description": "Price changes should not repeat per PO item",
+            "params": {
+                "activity": "Change Price"
+            },
+            "base_weight": 1.0,
+            "view_weights": {
+                "Finance": 0.3,
+                "Logistics": 0.1,
+                "Automation": 0.4
+            }
+        },
+        {
+            "id": "c_l4_change_quantity_once",
+            "layer_id": "singularity",
+            "description": "Quantity changes should not repeat per PO item",
+            "params": {
+                "activity": "Change Quantity"
+            },
+            "base_weight": 1.0,
+            "view_weights": {
+                "Finance": 0.2,
+                "Logistics": 0.2,
+                "Automation": 0.4
+            }
+        },
+        {
+            "id": "c_l4_change_currency_once",
+            "layer_id": "singularity",
+            "description": "Currency changes should not repeat per PO item",
+            "params": {
+                "activity": "Change Currency"
+            },
+            "base_weight": 1.0,
+            "view_weights": {
+                "Finance": 0.2,
+                "Logistics": 0.1,
+                "Automation": 0.3
+            }
+        },
+        {
+            "id": "c_l4_change_payment_terms_once",
+            "layer_id": "singularity",
+            "description": "Payment term changes should not repeat per PO item",
+            "params": {
+                "activity": "Change Payment Terms"
+            },
+            "base_weight": 1.0,
+            "view_weights": {
+                "Finance": 0.3,
+                "Logistics": 0.1,
+                "Automation": 0.3
+            }
+        },
+        {
+            "id": "c_l5_cancel_invoice",
+            "layer_id": "exclusion",
+            "description": "Invoice cancellations are treated as undesirable",
+            "params": {
+                "activity": "Cancel Invoice Receipt"
+            },
+            "base_weight": 1.0,
+            "view_weights": {
+                "Finance": 0.4,
+                "Logistics": 0.1,
+                "Automation": 0.4
+            }
+        },
+        {
+            "id": "c_l5_cancel_gr",
+            "layer_id": "exclusion",
+            "description": "Goods receipt cancellations are treated as undesirable",
+            "params": {
+                "activity": "Cancel Goods Receipt"
+            },
+            "base_weight": 1.0,
+            "view_weights": {
+                "Finance": 0.3,
+                "Logistics": 0.2,
+                "Automation": 0.3
+            }
+        },
+        {
+            "id": "c_l5_subsequent_invoice",
+            "layer_id": "exclusion",
+            "description": "Subsequent invoices are treated as exceptions",
+            "params": {
+                "activity": "Record Subsequent Invoice"
+            },
+            "base_weight": 1.0,
+            "view_weights": {
+                "Finance": 0.2,
+                "Logistics": 0.1,
+                "Automation": 0.3
+            }
+        },
+        {
+            "id": "c_l5_subsequent_credit",
+            "layer_id": "exclusion",
+            "description": "Subsequent credits are treated as exceptions",
+            "params": {
+                "activity": "Record Subsequent Credit"
+            },
+            "base_weight": 1.0,
+            "view_weights": {
+                "Finance": 0.2,
+                "Logistics": 0.1,
+                "Automation": 0.3
+            }
+        }
+    ]
+}

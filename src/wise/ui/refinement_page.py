@@ -315,9 +315,22 @@ bucket, month, ...).
         else:
             joined_sample = joined.copy()
 
-        X_raw = joined_sample[feature_cols]
+        # --- Build feature matrix X ---
+        X_raw = joined_sample[feature_cols].copy()
+
+        # 1) Booleans → ints, otherwise pandas tends to keep an object-ish mix
+        bool_cols = X_raw.select_dtypes(include=["bool"]).columns
+        if len(bool_cols) > 0:
+            X_raw[bool_cols] = X_raw[bool_cols].astype(int)
+
+        # 2) One-hot encode categoricals (and keep NaNs as a category)
         X = pd.get_dummies(X_raw, dummy_na=True)
-        y_sample = joined_sample["target"].values
+
+        # 3) SHAP's TreeExplainer wants pure float64, not a mixed/object array
+        X = X.astype(float)
+
+        # Target as float
+        y_sample = joined_sample["target"].astype(float).values
 
         st.write(f"Training on {len(joined_sample)} cases with {X.shape[1]} encoded features.")
 
@@ -330,8 +343,15 @@ bucket, month, ...).
         )
         model.fit(X, y_sample)
 
+        # Use the generic API; SHAP will pick TreeExplainer for RandomForest
         explainer = shap.Explainer(model, X)
-        shap_values = explainer(X)
+
+        # For tree models, it's often safer to disable the additivity check.
+        # On older SHAP versions 'check_additivity' may not exist, so we try/except.
+        try:
+            shap_values = explainer(X, check_additivity=False)
+        except TypeError:
+            shap_values = explainer(X)
 
         sample_df = joined_sample[[ds.case_id_col] + feature_cols + ["target"]].copy()
         sample_df["__row_pos__"] = np.arange(len(sample_df))
@@ -346,11 +366,7 @@ bucket, month, ...).
         st.session_state["wise_shap_state"] = shap_state
 
         st.success("Model trained and SHAP values computed.")
-    else:
-        st.info(
-            "Using previously trained SHAP model and explanations. "
-            "If you change the target or features, click 'Train / update SHAP model' again."
-        )
+
 
     if shap_state is None:
         return

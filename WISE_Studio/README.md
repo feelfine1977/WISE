@@ -45,6 +45,28 @@ res["backlogs"]["Default"].head()
 
 Figures land in `output/figures/`, tables in `output/tables/`.
 
+## Large files (500 MB and beyond)
+
+WISE Studio is built to handle big logs:
+
+- **Use the file-path input** on Step 1 instead of the browser upload — it reads
+  straight from disk (the upload widget works too; the limit is raised to 2 GB
+  in `.streamlit/config.toml`, but uploading hundreds of MB through a browser
+  is the slow way).
+- **Profiling runs on a sample.** Files over ~120 MB are profiled and mapped on
+  the first 150,000 rows — instant, and column detection doesn't need more.
+- **The full file loads only the mapped columns.** When you click *Apply
+  mapping*, only the columns you mapped are parsed (`usecols`), and repetitive
+  text columns (activity, resource, dimensions) are stored as categoricals. In
+  testing this cuts memory to **under 10% of a naive full load** — a 500 MB CSV
+  ends up around a few hundred MB in RAM instead of multiple GB.
+- The headless pipeline applies the same pruning automatically, so
+  `python -m wise.pipeline big_log.csv mapping.json norm.json …` is the most
+  memory-lean route of all.
+
+Rule of thumb: 8 GB of RAM comfortably handles a 500 MB–1 GB CSV through the
+path-input route.
+
 ## The two config files
 
 **`log_mapping.json`** — what your columns mean:

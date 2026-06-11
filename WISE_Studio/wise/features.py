@@ -33,9 +33,13 @@ def build_case_features(events: pd.DataFrame, mapping: dict) -> pd.DataFrame:
     # dimensions: first value per case
     dims = [c for c in mapping.get("dimensions", []) if c in events.columns]
     if dims:
-        out = out.merge(g[dims].first().reset_index(), on="case_id")
+        first_dims = g[dims].first().reset_index()
+        for d in dims:  # case table is small — plain str keeps groupbys simple
+            first_dims[d] = first_dims[d].astype(str)
+        out = out.merge(first_dims, on="case_id")
     if "document_id" in events.columns:
-        out = out.merge(g["document_id"].first().reset_index(), on="case_id")
+        doc = g["document_id"].first().astype(str).reset_index()
+        out = out.merge(doc, on="case_id")
 
     # numeric attributes: per-case total + max
     for a in mapping.get("numeric_attributes", []):

@@ -93,7 +93,7 @@ def common_pairs(events: pd.DataFrame, top=10) -> pd.DataFrame:
     pairs = pd.DataFrame({"from": e["activity"][same], "to": nxt_act[same],
                           "lag_days": (nxt_ts[same] - e["timestamp"][same]).dt.total_seconds()/86400})
     pairs = pairs[pairs["from"] != pairs["to"]]
-    agg = (pairs.groupby(["from", "to"])
+    agg = (pairs.groupby(["from", "to"], observed=True)
            .agg(count=("lag_days", "size"), median_lag_days=("lag_days", "median"),
                 p90_lag_days=("lag_days", lambda s: s.quantile(0.9)))
            .sort_values("count", ascending=False).reset_index())

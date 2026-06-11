@@ -25,12 +25,15 @@ def run(csv_path, mapping_path, norm_path, slice_dims=None, gamma=20.0,
     mapping = load_mapping(mapping_path) if isinstance(mapping_path, (str, Path)) else mapping_path
     nrm = wnorm.load_norm(norm_path) if isinstance(norm_path, (str, Path)) else norm_path
 
-    df_raw, enc = dataio.read_csv_any(csv_path, encoding=mapping.get("encoding", "utf-8"))
-    issues = validate_mapping(df_raw, mapping)
+    # Validate on a cheap sample, then load ONLY the mapped columns (memory lever
+    # for large files: a 500 MB CSV typically shrinks to a fraction in memory).
+    df_sample, enc = dataio.load_sample(csv_path, encoding=mapping.get("encoding", "utf-8"))
+    issues = validate_mapping(df_sample, mapping)
     if any(l == "error" for l, _ in issues):
         raise ValueError("Mapping errors: " + "; ".join(m for l, m in issues if l == "error"))
+    del df_sample
 
-    events = dataio.canonicalize(df_raw, mapping)
+    events, enc = dataio.load_mapped(csv_path, mapping)
     fc = features.build_case_features(events, mapping)
     fc = balance_features.add_balance_totals(fc, events, nrm)
     viol = constraints.build_violation_matrix(fc, nrm)

@@ -28,6 +28,7 @@ import streamlit as st
 
 from wise import dataio, features, norm as wnorm, balance_features, constraints
 from wise import scoring, prioritize, viz
+from wise.dataio import load_mapped, load_sample, mapped_columns
 from wise.mapping import (detect_mapping, empty_mapping, profile_columns,
                           validate_mapping, slug)
 from wise.demo import generate_demo_log
@@ -47,8 +48,11 @@ CTYPE_HELP = {
 # ---------------------------------------------------------------- state
 def _init_state():
     ss = st.session_state
-    ss.setdefault("df_raw", None)
+    ss.setdefault("df_raw", None)          # profiling frame (may be a sample)
     ss.setdefault("source_name", None)
+    ss.setdefault("source", None)          # ("path", p) | ("buffer", bytes)
+    ss.setdefault("is_sample", False)
+    ss.setdefault("n_loaded_events", None)
     ss.setdefault("mapping", empty_mapping())
     ss.setdefault("confidence", {})
     ss.setdefault("events", None)
@@ -62,10 +66,22 @@ _init_state()
 ss = st.session_state
 
 
+SAMPLE_ROWS = 150_000  # profiling sample size for large files
+
+
 def _rebuild_canonical():
-    """(Re)build canonical events + case features after mapping changes."""
-    ss.events = dataio.canonicalize(ss.df_raw, ss.mapping)
+    """Full mapped load (only the mapped columns) + case features.
+    Frees the raw profiling frame afterwards — on large logs the canonical
+    events frame (categorical dtypes) is what we keep, nothing else."""
+    import io as _io
+    kind, src = ss.source
+    if kind == "path":
+        ss.events, _ = load_mapped(src, ss.mapping)
+    else:
+        ss.events, _ = load_mapped(_io.BytesIO(src), ss.mapping)
     ss.fc = features.build_case_features(ss.events, ss.mapping)
+    ss.n_loaded_events = len(ss.events)
+    ss.df_raw = None          # release the profiling frame
     ss.result = None
 
 
@@ -76,8 +92,12 @@ with st.sidebar:
     step = st.radio("Steps", ["1 · Upload & Map", "2 · Build the Norm", "3 · Analyze"],
                     label_visibility="collapsed")
     st.divider()
-    if ss.df_raw is not None:
-        st.success(f"Data: **{ss.source_name}**  \n{len(ss.df_raw):,} rows")
+    if ss.source_name is not None:
+        if ss.n_loaded_events:
+            st.success(f"Data: **{ss.source_name}**  \n{ss.n_loaded_events:,} events loaded")
+        elif ss.df_raw is not None:
+            note = " (profiling sample)" if ss.is_sample else ""
+            st.success(f"Data: **{ss.source_name}**  \n{len(ss.df_raw):,} rows{note}")
     if ss.events is not None:
         st.info(f"Mapped: {ss.events['case_id'].nunique():,} cases, "
                 f"{ss.events['activity'].nunique()} activities")
@@ -106,15 +126,24 @@ if step.startswith("1"):
     if demo_btn:
         ss.df_raw = generate_demo_log(3000)
         ss.source_name = "demo order-to-delivery log"
+        ss.source = ("buffer", ss.df_raw.to_csv(index=False).encode())
+        ss.is_sample = False
         loaded = True
     elif up is not None and (ss.source_name != up.name):
-        df, enc = dataio.read_csv_any(io.BytesIO(up.getvalue()))
+        raw = up.getvalue()
+        big = len(raw) > 120 * 1024 * 1024          # >120 MB → profile a sample
+        df, enc = load_sample(io.BytesIO(raw), sample_rows=SAMPLE_ROWS) if big \
+            else dataio.read_csv_any(io.BytesIO(raw))
         ss.df_raw, ss.source_name = df, up.name
+        ss.source, ss.is_sample = ("buffer", raw), big
         ss.mapping["encoding"] = enc
         loaded = True
     elif path_in and Path(path_in).exists() and ss.source_name != path_in:
-        df, enc = dataio.read_csv_any(path_in)
+        big = Path(path_in).stat().st_size > 120 * 1024 * 1024
+        df, enc = load_sample(path_in, sample_rows=SAMPLE_ROWS) if big \
+            else dataio.read_csv_any(path_in)
         ss.df_raw, ss.source_name = df, path_in
+        ss.source, ss.is_sample = ("path", path_in), big
         ss.mapping["encoding"] = enc
         loaded = True
 
@@ -125,9 +154,20 @@ if step.startswith("1"):
         ss.events = ss.fc = ss.result = None
         st.toast("Columns profiled — review the suggested mapping below.")
 
-    if ss.df_raw is None:
+    if ss.df_raw is None and ss.events is None:
         st.info("Upload a CSV, enter a path, or click **Use demo data** to try the app instantly.")
         st.stop()
+    if ss.df_raw is None and ss.events is not None:
+        st.success(f"Mapping applied — {ss.fc['case_id'].nunique():,} cases / "
+                   f"{ss.n_loaded_events:,} events loaded (only the mapped columns). "
+                   "Load a different file above, or continue with **Step 2**.")
+        st.stop()
+    if ss.is_sample:
+        st.warning(f"Large file detected — profiling and mapping run on the first "
+                   f"{len(ss.df_raw):,} rows. The **full file** is parsed (mapped "
+                   f"columns only) when you click *Apply mapping*. For files of "
+                   f"several hundred MB, prefer the file-path input over the "
+                   f"browser upload.")
 
     st.subheader("Column profile")
     st.dataframe(profile_columns(ss.df_raw).round(3), use_container_width=True, height=240)
@@ -171,7 +211,8 @@ if step.startswith("1"):
     with c1:
         if st.button("✅ Apply mapping & build case table", type="primary",
                      disabled=not ok, use_container_width=True):
-            with st.spinner("Canonicalising events and building case features…"):
+            with st.spinner("Loading the full file (mapped columns only) and "
+                            "building the case table — large files can take a minute…"):
                 _rebuild_canonical()
             st.success(f"Done — {ss.fc['case_id'].nunique():,} cases ready. "
                        "Continue with **Step 2 — Build the Norm**.")
@@ -446,9 +487,11 @@ else:
         st.download_button("backlog.csv",
                            res["backlogs"][view].to_csv(index=False),
                            f"backlog_{view.lower()}.csv", "text/csv")
-        st.download_button("case_scores.csv (full)",
-                           scores.to_csv(index=False),
-                           "case_scores.csv", "text/csv")
+        if st.checkbox("Prepare full case_scores.csv export "
+                       "(can be large — one row per case, all columns)"):
+            st.download_button("case_scores.csv (full)",
+                               scores.to_csv(index=False),
+                               "case_scores.csv", "text/csv")
         st.download_button("norm.json", json.dumps(nrm, indent=2),
                            "norm.json", "application/json")
         st.download_button("log_mapping.json", json.dumps(ss.mapping, indent=2),

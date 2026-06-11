@@ -96,6 +96,9 @@ def detect_mapping(df: pd.DataFrame):
     cand["sc"] = cand["unique_ratio"] + cand["column"].map(
         lambda c: 0.35 if name_hit(c, ("case", "_id", " id", "id_", "concept:name",
                                        "ticket", "order", "number")) else 0)
+    # A case id repeats across events; a column unique on (almost) every ROW is
+    # an *event* id, not a case id — penalise it hard.
+    cand.loc[cand["unique_ratio"] > 0.98, "sc"] *= 0.3
     cand = cand.sort_values("sc", ascending=False)
     if len(cand):
         m["case_id"] = cand.iloc[0]["column"]; conf["case_id"] = float(min(cand.iloc[0]["sc"], 1))

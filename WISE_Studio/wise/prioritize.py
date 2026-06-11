@@ -7,7 +7,7 @@ def slice_backlog(scores: pd.DataFrame, view: str, group_cols, gamma: float = 20
     sc = f"score__{view}"
     d = scores.dropna(subset=[sc])
     mu = float(d[sc].mean())
-    g = d.groupby(group_cols, dropna=False)
+    g = d.groupby(group_cols, dropna=False, observed=True)
     out = g.agg(cases=("case_id", "size"), slice_mean=(sc, "mean")).reset_index()
     out["global_mean"] = mu
     out["shrunk_mean"] = (out["cases"]*out["slice_mean"] + gamma*mu) / (out["cases"] + gamma)
@@ -44,7 +44,7 @@ def classify_hotspots(backlog: pd.DataFrame, top_n=12) -> pd.DataFrame:
 def layer_deltas(scores: pd.DataFrame, view: str, group_cols, norm: dict) -> pd.DataFrame:
     cols = [f"contrib__{view}__{l}" for l in norm["layers"]]
     gm = scores[cols].mean()
-    d = scores.groupby(group_cols, dropna=False)[cols].mean() - gm
+    d = scores.groupby(group_cols, dropna=False, observed=True)[cols].mean() - gm
     d.columns = list(norm["layers"].keys())
     return d
 

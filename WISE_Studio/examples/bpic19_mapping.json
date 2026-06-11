@@ -1,0 +1,12 @@
+{
+  "case_id": "case concept:name",
+  "activity": "event concept:name",
+  "timestamp": "event time:timestamp",
+  "resource": "event org:resource",
+  "dimensions": ["case Company", "case Spend area text", "case Vendor",
+                 "case Item Type", "case Item Category"],
+  "numeric_attributes": ["event Cumulative net worth (EUR)"],
+  "document_id": "case Purchasing Document",
+  "encoding": "latin-1",
+  "timestamp_format": null
+}

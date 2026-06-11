@@ -165,6 +165,7 @@ wise_flow/tests/explore_data.ipynb
 /wise_flow
 /wise_flow/docs
 *.ttf
+*.zip
 data/data_BPIC_2019/~$WISE_Framework_BPIC_2019.xlsx
 .DS_Store
 data/data_BPIC_2019/.DS_Store
@@ -432,3 +433,4 @@ src/wise/.DS_Store
 src/wise/analysis/.DS_Store
 src/wise/analysis/BPIC19_Pm2_WISE_Analysis.ipynb
 src/wise/analysis/data/.DS_Store
+figures/paper.zip
